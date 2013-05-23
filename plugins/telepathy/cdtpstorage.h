@@ -24,6 +24,9 @@
 #ifndef CDTPSTORAGE_H
 #define CDTPSTORAGE_H
 
+#include <QContact>
+#include <QContactOnlineAccount>
+
 #include <QByteArray>
 #include <QObject>
 #include <QString>
@@ -32,6 +35,8 @@
 #include "cdtpaccount.h"
 #include "cdtpcontact.h"
 #include "cdtpquery.h"
+
+QTM_USE_NAMESPACE
 
 class CDTpStorage : public QObject
 {
@@ -56,25 +61,29 @@ public Q_SLOTS:
     void updateContact(CDTpContactPtr contactWrapper, CDTpContact::Changes changes);
 
 public:
-    void createAccountContacts(const QString &accountPath, const QStringList &imIds, uint localId);
-    void removeAccountContacts(const QString &accountPath, const QStringList &contactIds);
+    void createAccountContacts(CDTpAccountPtr accountWrapper, const QStringList &imIds, uint localId);
+    void removeAccountContacts(CDTpAccountPtr accountWrapper, const QStringList &contactIds);
 
 private Q_SLOTS:
-    void onSyncOperationEnded(CDTpSparqlQuery *query);
     void onUpdateQueueTimeout();
-    void onUpdateFinished(CDTpSparqlQuery *query);
-    void onSparqlQueryFinished(CDTpSparqlQuery *query);
 
 private:
     void cancelQueuedUpdates(const QList<CDTpContactPtr> &contacts);
-    void triggerGarbageCollector(CDTpQueryBuilder &builder, uint nContacts);
+
+    void addNewAccount(QContact &self, CDTpAccountPtr accountWrapper);
+    void removeExistingAccount(QContact &self, QContactOnlineAccount &existing);
+
+    void updateAccountChanges(QContactOnlineAccount &qcoa, CDTpAccountPtr accountWrapper, CDTpAccount::Changes changes);
+
+    bool initializeNewContact(QContact &newContact, CDTpAccountPtr accountWrapper, const QString &contactId);
+    void updateContactChanges(CDTpContactPtr contactWrapper, CDTpContact::Changes changes, QContact &existing, QList<QContact> *saveList, QList<QContactLocalId> *removeList);
+    void updateContactChanges(CDTpContactPtr contactWrapper, CDTpContact::Changes changes);
 
 private:
     QHash<CDTpContactPtr, CDTpContact::Changes> mUpdateQueue;
     QNetworkAccessManager mNetwork;
     QTimer mUpdateTimer;
     bool mUpdateRunning;
-    bool mDirectGC;
 };
 
 #endif // CDTPSTORAGE_H

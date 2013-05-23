@@ -1,5 +1,5 @@
 Name: contactsd
-Version: 1.2.0
+Version: 1.3.0
 Release: 1
 Summary: Telepathy <> tracker bridge for contacts
 Group: System/Libraries

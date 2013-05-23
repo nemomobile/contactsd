@@ -22,7 +22,6 @@
  **/
 
 #include "cdtpquery.h"
-#include "cdtpstorage.h"
 #include "debug.h"
 
 #include "base-plugin.h"

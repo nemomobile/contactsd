@@ -26,7 +26,11 @@
 #ifndef CDTPAVATARREQUEST_H
 #define CDTPAVATARREQUEST_H
 
-#include "cdtpstorage.h"
+#include <QDir>
+#include <QString>
+#include <QNetworkReply>
+
+#include "cdtpcontact.h"
 
 class CDTpAvatarUpdate : public QObject
 {

@@ -33,7 +33,6 @@
 
 #include "buddymanagementadaptor.h"
 #include "cdtpcontroller.h"
-#include "cdtpstorage.h"
 #include "debug.h"
 
 using namespace Contactsd;
@@ -317,9 +316,6 @@ void CDTpController::removeBuddies(const QString &accountPath, const QStringList
 {
     debug() << "RemoveBuddies:" << accountPath << imIds.join(QLatin1String(", "));
 
-    // Remove ids from storage
-    mStorage->removeAccountContacts(accountPath, imIds);
-
     // Add ids to offlineRemovals, in case it does not get removed right now from server
     QStringList currentList = updateOfflineRosterBuffer(offlineRemovals, accountPath, imIds, QStringList());
 
@@ -328,6 +324,9 @@ void CDTpController::removeBuddies(const QString &accountPath, const QStringList
         debug() << "Account not found";
         return;
     }
+
+    // Remove ids from storage
+    mStorage->removeAccountContacts(accountWrapper, imIds);
 
     // Add contact to account's avoid list
     accountWrapper->setContactsToAvoid(currentList);
@@ -474,7 +473,7 @@ void CDTpInvitationOperation::onContactsRetrieved(Tp::PendingOperation *op)
         // We still create the IMAddress on the contact if the request fails, so
         // that user has a feedback
         if (mContactLocalId != 0) {
-            mStorage->createAccountContacts(mAccountWrapper->account()->objectPath(), mContactIds, mContactLocalId);
+            mStorage->createAccountContacts(mAccountWrapper, mContactIds, mContactLocalId);
         }
 
         setFinishedWithError(op->errorName(), op->errorMessage());
@@ -495,7 +494,7 @@ void CDTpInvitationOperation::onContactsRetrieved(Tp::PendingOperation *op)
             resolvedIds.append(id);
         }
 
-        mStorage->createAccountContacts(mAccountWrapper->account()->objectPath(), resolvedIds, mContactLocalId);
+        mStorage->createAccountContacts(mAccountWrapper, resolvedIds, mContactLocalId);
     }
 
     PendingOperation *call = pcontacts->manager()->requestPresenceSubscription(pcontacts->contacts());
