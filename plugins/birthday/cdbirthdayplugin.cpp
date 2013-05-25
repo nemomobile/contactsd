@@ -41,7 +41,7 @@ void CDBirthdayPlugin::init()
 {
     debug() << "Initializing contactsd birthday plugin";
 
-    mController = new CDBirthdayController(BasePlugin::sparqlConnection(), this);
+    mController = new CDBirthdayController(this);
 }
 
 CDBirthdayPlugin::MetaData CDBirthdayPlugin::metaData()

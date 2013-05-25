@@ -32,8 +32,6 @@ debian/contactsd-plugin-birthday
 debian/contactsd-tests
 debian/contactsd
 
-plugins/garbage-collector/garbagecollectoradaptor.cpp
-plugins/garbage-collector/garbagecollectoradaptor.h
 plugins/telepathy/buddymanagementadaptor.cpp
 plugins/telepathy/buddymanagementadaptor.h
 

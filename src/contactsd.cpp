@@ -21,9 +21,11 @@
  ** conditions contained in a signed written agreement between you and Nokia.
  **/
 
+#include <QCoreApplication>
 #include <QSettings>
 #include <QDBusConnection>
 #include <QDBusError>
+#include <QDir>
 
 #include "contactsd.h"
 #include "contactsdpluginloader.h"

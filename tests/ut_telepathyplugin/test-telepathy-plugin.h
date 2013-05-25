@@ -39,8 +39,6 @@
 #include "libtelepathy/simple-account-manager.h"
 #include "libtelepathy/simple-account.h"
 
-#include <qtcontacts-tracker/trackerchangelistener.h>
-
 #include "test.h"
 #include "test-expectation.h"
 
@@ -60,11 +58,9 @@ public:
 protected Q_SLOTS:
     void contactsAdded(const QList<QContactLocalId>& contactIds);
     void contactsChanged(const QList<QContactLocalId>& contactIds);
-    void contactsPresenceChanged(const QList<QContactLocalId>& contactIds);
     void contactsRemoved(const QList<QContactLocalId>& contactIds);
     void onContactsFetched();
     void onRequestFinished();
-    void onLeakQueryFinished();
 
 private Q_SLOTS:
     void initTestCase();
@@ -102,13 +98,10 @@ private:
     GPtrArray *createContactInfoTel(const gchar *number);
     void verify(Event event, const QList<QContactLocalId> &contactIds);
     void runExpectation(TestExpectationPtr expectation);
-    void mergeContacts(const QContact &contactTarget,
-            const QList<QContactLocalId> &sourceContactIds);
     void startRequest(QContactAbstractRequest *request);
 
 private:
     QContactManager *mContactManager;
-    QctTrackerChangeListener *mOmitPresenceListener;
     TpTestsSimpleAccountManager *mAccountManager;
     TpTestsSimpleAccount *mAccount;
 

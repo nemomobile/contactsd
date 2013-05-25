@@ -31,10 +31,6 @@
 #include <QContactFetchRequest>
 #include <QContactManager>
 
-#include <QtSparql>
-
-#include <QtSparqlTrackerExtensions/TrackerChangeNotifier>
-
 class CDBirthdayCalendar;
 
 QTM_USE_NAMESPACE
@@ -49,51 +45,32 @@ class CDBirthdayController : public QObject
     };
 
 public:
-    explicit CDBirthdayController(QSparqlConnection &connection,
-                                  QObject *parent = 0);
+    explicit CDBirthdayController(QObject *parent = 0);
     ~CDBirthdayController();
 
 private Q_SLOTS:
-    void onTrackerIdsFetched();
-    void onGraphChanged(const QList<TrackerChangeNotifier::Quad> &deletions,
-                        const QList<TrackerChangeNotifier::Quad> &insertions);
+    void contactsChanged(const QList<QContactLocalId> &contacts);
+    void contactsRemoved(const QList<QContactLocalId> &contacts);
+
     void onFetchRequestStateChanged(QContactAbstractRequest::State newState);
     void onFullSyncRequestStateChanged(QContactAbstractRequest::State newState);
+    void updateAllBirthdays();
 
 private:
-    void fetchTrackerIds();
     bool stampFileExists();
     void createStampFile();
     QString stampFilePath() const;
-    void updateAllBirthdays();
-    void connectChangeNotifier();
     bool processFetchRequest(QContactFetchRequest * const fetchRequest,
                              QContactAbstractRequest::State newState,
                              SyncMode syncMode = Incremental);
-    void processNotificationQueues();
-    void processNotifications(QList<TrackerChangeNotifier::Quad> &notifications,
-                              QSet<QContactLocalId> &propertyChanges,
-                              QSet<QContactLocalId> &resourceChanges);
     void fetchContacts(const QList<QContactLocalId> &contactIds);
     void fetchContacts(const QContactFilter &filter, const char *slot);
     void updateBirthdays(const QList<QContact> &changedBirthdays);
     void syncBirthdays(const QList<QContact> &birthdayContacts);
 
 private:
-    enum {
-        NcoBirthDate,
-        RdfType,
-        NcoPersonContact,
-        NcoContactGroup,
-        NTrackerIds
-    };
-
-    QSparqlConnection &mSparqlConnection;
-    QList<TrackerChangeNotifier::Quad> mDeleteNotifications;
-    QList<TrackerChangeNotifier::Quad> mInsertNotifications;
     CDBirthdayCalendar *mCalendar;
     QContactManager *mManager;
-    int mTrackerIds[NTrackerIds];
 };
 
 #endif // CDBIRTHDAYCONTROLLER_H

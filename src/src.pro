@@ -31,7 +31,6 @@ system(qdbusxml2cpp -c ContactsImportProgressAdaptor -a contactsimportprogressad
 INCLUDEPATH += $$TOP_SOURCEDIR/lib
 LIBS += -export-dynamic
 DEFINES += ENABLE_DEBUG
-CONFIG += qtsparql
 
 HEADERS += contactsd.h \
     contactsdpluginloader.h \

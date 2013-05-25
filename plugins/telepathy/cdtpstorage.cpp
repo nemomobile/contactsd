@@ -51,8 +51,6 @@
 #include <QContactRelationship>
 #include <QContactUrl>
 
-#include <qtcontacts-tracker/phoneutils.h>
-
 #include "cdtpstorage.h"
 #include "cdtpavatarupdate.h"
 #include "debug.h"

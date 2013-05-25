@@ -22,9 +22,11 @@
 
 TEMPLATE = lib
 QT -= gui
-QT += dbus
+QT += dbus network
 
-CONFIG += plugin qtsparql qtcontacts_extensions_tracker cubi-0.1 cubi-0.1-tracker-0.10-ontologies
+CONFIG += plugin mobility
+MOBILITY += contacts
+
 system(qdbusxml2cpp -c BuddyManagementAdaptor -a buddymanagementadaptor.h:buddymanagementadaptor.cpp com.nokia.contacts.buddymanagement.xml)
 
 CONFIG(coverage):{
@@ -33,7 +35,7 @@ LIBS += -lgcov
 }
 
 CONFIG += link_pkgconfig
-PKGCONFIG += TelepathyQt4 tracker-sparql-0.14
+PKGCONFIG += TelepathyQt4 
 DEFINES += QT_NO_CAST_TO_ASCII QT_NO_CAST_FROM_ASCII
 
 INCLUDEPATH += $$TOP_SOURCEDIR/src
@@ -47,7 +49,6 @@ HEADERS  = cdtpaccount.h \
     cdtpcontact.h \
     cdtpcontroller.h \
     cdtpplugin.h \
-    cdtpquery.h \
     cdtpstorage.h \
     buddymanagementadaptor.h \
     cdtpavatarupdate.h
@@ -58,7 +59,6 @@ SOURCES  = cdtpaccount.cpp \
     cdtpcontact.cpp \
     cdtpcontroller.cpp \
     cdtpplugin.cpp \
-    cdtpquery.cpp \
     cdtpstorage.cpp \
     buddymanagementadaptor.cpp \
     cdtpavatarupdate.cpp

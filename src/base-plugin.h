@@ -30,8 +30,7 @@
 #include <QStringList>
 #include <QMap>
 #include <QThreadStorage>
-#include <QtSparql>
-
+#include <QDir>
 
 namespace Contactsd
 {
@@ -52,8 +51,6 @@ public:
 
     static QDir cacheDir();
     static QString cacheFileName(const QString &fileName);
-
-    static QSparqlConnection &sparqlConnection();
 
 Q_SIGNALS:
     // \param service - display name of a service (e.g. Gtalk, MSN)

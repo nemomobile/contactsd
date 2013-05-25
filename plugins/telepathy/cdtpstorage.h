@@ -31,10 +31,10 @@
 #include <QObject>
 #include <QString>
 #include <QUrl>
+#include <QNetworkAccessManager>
 
 #include "cdtpaccount.h"
 #include "cdtpcontact.h"
-#include "cdtpquery.h"
 
 QTM_USE_NAMESPACE
 

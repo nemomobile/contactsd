@@ -31,10 +31,6 @@
 #include <QContactLocalIdFilter>
 #include <QContactOnlineAccount>
 
-#include <QtSparql>
-
-#include <qtcontacts-tracker/contactmergerequest.h>
-
 #include <TelepathyQt/Debug>
 
 #include "libtelepathy/util.h"
@@ -69,7 +65,7 @@ void TestTelepathyPlugin::initTestCase()
     dbus_g_bus_get(DBUS_BUS_STARTER, 0);
 
     /* Create a QContactManager and track added/changed contacts */
-    mContactManager = new QContactManager(QLatin1String("tracker"));
+    mContactManager = new QContactManager;
     connect(mContactManager,
             SIGNAL(contactsAdded(const QList<QContactLocalId>&)),
             SLOT(contactsAdded(const QList<QContactLocalId>&)));
@@ -80,15 +76,6 @@ void TestTelepathyPlugin::initTestCase()
             SIGNAL(contactsRemoved(const QList<QContactLocalId>&)),
             SLOT(contactsRemoved(const QList<QContactLocalId>&)));
     mLocalContactIds += mContactManager->selfContactId();
-
-    /* Create a secondary listener that does trigger for presence-only updates */
-    const QStringList classesToWatch = QStringList()
-            << QLatin1String("http://www.semanticdesktop.org/ontologies/2007/03/22/nco#PersonContact");
-    mOmitPresenceListener = new QctTrackerChangeListener(classesToWatch, this);
-    mOmitPresenceListener->setChangeFilterMode(QctTrackerChangeListener::OnlyPresenceChanges);
-    connect(mOmitPresenceListener,
-            SIGNAL(contactsChanged(const QList<QContactLocalId>&)),
-            SLOT(contactsPresenceChanged(const QList<QContactLocalId>&)));
 
     /* Create a fake AccountManager */
     TpDBusDaemon *dbus = tp_dbus_daemon_dup(NULL);
@@ -172,71 +159,9 @@ void TestTelepathyPlugin::cleanup()
 
     QVERIFY(mLocalContactIds.count() == 1);
 
-    static QSparqlConnection *connection = new QSparqlConnection("QTRACKER_DIRECT");
-    if (mCheckLeakedResources) {
-        static const QString query(QString::fromLatin1 ("SELECT * {"
-                "OPTIONAL {?v1 a nco:IMAddress}."
-                "OPTIONAL {?v2 a nco:Affiliation}."
-                "OPTIONAL {?v3 a nco:PhoneNumber}."
-                "OPTIONAL {?v4 a nco:PostalAddress}."
-                "OPTIONAL {?v5 a nco:EmailAddress}."
-                "OPTIONAL {?v6 a nco:OrganizationContact}."
-            "}"));
-
-        QSparqlResult *result = connection->exec(QSparqlQuery(query, QSparqlQuery::SelectStatement));
-        QVERIFY(result != 0);
-        QVERIFY(!result->hasError());
-        connect(result, SIGNAL(finished()), SLOT(onLeakQueryFinished()), Qt::QueuedConnection);
-        QCOMPARE(mLoop->exec(), 0);
-    } else {
-        /* If we don't assert those does not exist, delete them to be sure and
-         * not fail on next tests  */
-        static const QString query(QString::fromLatin1 ("DELETE {"
-            "?v1 a rdfs:Resource."
-            "?v2 a rdfs:Resource."
-            "?v3 a rdfs:Resource."
-            "?v4 a rdfs:Resource."
-            "?v5 a rdfs:Resource."
-            "?v6 a rdfs:Resource."
-        "} WHERE {"
-            "OPTIONAL {?v1 a nco:IMAddress}."
-            "OPTIONAL {?v2 a nco:Affiliation}."
-            "OPTIONAL {?v3 a nco:PhoneNumber}."
-            "OPTIONAL {?v4 a nco:PostalAddress}."
-            "OPTIONAL {?v5 a nco:EmailAddress}."
-            "OPTIONAL {?v6 a nco:OrganizationContact}."
-        "}"));
-
-        QSparqlResult *result = connection->exec(QSparqlQuery(query, QSparqlQuery::DeleteStatement));
-        QVERIFY(result != 0);
-        QVERIFY(!result->hasError());
-        connect(result, SIGNAL(finished()), mLoop, SLOT(quit()), Qt::QueuedConnection);
-        QCOMPARE(mLoop->exec(), 0);
-    }
-
     g_object_unref(mConnService);
     g_object_unref(mConnection);
     g_object_unref(mAccount);
-}
-
-void TestTelepathyPlugin::onLeakQueryFinished()
-{
-    QSparqlResult *result = qobject_cast<QSparqlResult *>(sender());
-
-    bool leak = false;
-
-    while (result->next()) {
-        for (int i = 0; i < 6; i++) {
-            if (!result->stringValue(i).isEmpty()) {
-                qDebug() << "Got leaked resource:" << result->stringValue(i);
-                leak = true;
-            }
-        }
-    }
-
-    mLoop->quit();
-
-    QVERIFY(!leak);
 }
 
 void TestTelepathyPlugin::testBasicUpdates()
@@ -268,7 +193,7 @@ void TestTelepathyPlugin::testBasicUpdates()
         TP_TESTS_CONTACTS_CONNECTION (mConnService),
         1, &handle, &presence, &message);
 
-    exp->setEvent(EventPresenceChanged);
+    exp->setEvent(EventChanged);
     exp->verifyPresence(presence);
     runExpectation(exp);
 }
@@ -709,6 +634,10 @@ void TestTelepathyPlugin::testMergedContact()
     /* Merge contact2 into contact1 */
     QContact contact1 = exp1->contact();
     QContact contact2 = exp2->contact();
+
+    /* Explicit contact merging does not exist with qtcontacts-sqlite, and requires
+     * direct use of qtcontacts-tracker-extensions. Disabled until refactoring is possible. */
+#if 0
     const QList<QContactLocalId> mergeIds = QList<QContactLocalId>() << contact2.localId();
     mergeContacts(contact1, mergeIds);
     exp1->verifyLocalId(contact1.localId());
@@ -717,6 +646,7 @@ void TestTelepathyPlugin::testMergedContact()
     exp2->verifyGenerator("telepathy");
     const QList<TestExpectationContactPtr> expectations = QList<TestExpectationContactPtr>() << exp1 << exp2;
     runExpectation(TestExpectationMergePtr(new TestExpectationMerge(contact1.localId(), mergeIds, expectations)));
+#endif
 
     /* Change presence of contact1, verify it modify the global presence */
     TpTestsContactsConnectionPresenceStatusIndex presence =
@@ -725,7 +655,7 @@ void TestTelepathyPlugin::testMergedContact()
     tp_tests_contacts_connection_change_presences(
         TP_TESTS_CONTACTS_CONNECTION (mConnService),
         1, &handle1, &presence, &message);
-    TestExpectationContactPtr exp4(new TestExpectationContact(EventPresenceChanged));
+    TestExpectationContactPtr exp4(new TestExpectationContact(EventChanged));
     exp4->verifyLocalId(contact1.localId());
     exp4->verifyPresence(presence);
     runExpectation(exp4);
@@ -751,20 +681,6 @@ void TestTelepathyPlugin::testMergedContact()
         SLOT(onContactsFetched()));
     QVERIFY(request->start());
 #endif
-}
-
-void TestTelepathyPlugin::mergeContacts(const QContact &contactTarget,
-        const QList<QContactLocalId> &sourceContactIds)
-{
-    QMultiMap<QContactLocalId, QContactLocalId> mergeIds;
-
-    Q_FOREACH (QContactLocalId id, sourceContactIds) {
-        mergeIds.insert (contactTarget.localId(), id);
-    }
-
-    QctContactMergeRequest *mergeRequest = new QctContactMergeRequest();
-    mergeRequest->setMergeIds(mergeIds);
-    startRequest(mergeRequest);
 }
 
 void TestTelepathyPlugin::startRequest(QContactAbstractRequest *request)
@@ -896,15 +812,6 @@ void TestTelepathyPlugin::contactsChanged(const QList<QContactLocalId>& contactI
         QVERIFY(mLocalContactIds.contains(id));
     }
     verify(EventChanged, contactIds);
-}
-
-void TestTelepathyPlugin::contactsPresenceChanged(const QList<QContactLocalId>& contactIds)
-{
-    debug() << "Got contactsPresenceChanged";
-    Q_FOREACH (const QContactLocalId &id, contactIds) {
-        QVERIFY(mLocalContactIds.contains(id));
-    }
-    verify(EventPresenceChanged, contactIds);
 }
 
 void TestTelepathyPlugin::contactsRemoved(const QList<QContactLocalId>& contactIds)

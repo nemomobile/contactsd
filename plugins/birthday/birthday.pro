@@ -28,7 +28,8 @@ QT -= gui
 # first.
 INCLUDEPATH += /usr/include/mlocale
 
-CONFIG += plugin qtsparql qtsparql-tracker-extensions qtcontacts_extensions_tracker cubi-0.1-tracker-0.10-ontologies mlocale mkcal
+CONFIG += plugin mlocale mkcal mobility
+MOBILITY += contacts
 
 CONFIG(coverage):{
 QMAKE_CXXFLAGS += -c -g  --coverage -ftest-coverage -fprofile-arcs

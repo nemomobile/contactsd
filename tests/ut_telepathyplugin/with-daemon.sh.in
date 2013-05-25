@@ -46,7 +46,7 @@ ut_pid=$!
 export CONTACTSD_PLUGINS_DIRS=@PLUGINDIR@
 export CONTACTSD_DIRECT_GC=1
 # We load only the needed plugins (to avoid eg. voicemail creating contacts)
-@BINDIR@/contactsd --plugins telepathy,garbage-collector &
+@BINDIR@/contactsd --plugins telepathy &
 contactsd_pid=$!
 
 # wait for unit test to finish

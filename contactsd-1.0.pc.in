@@ -8,6 +8,5 @@ moc_includedir=${includedir}/contactsd-1.0
 Name: contactsd
 Description: Contact synchronization daemon for meego
 Version: @VERSION@
-Requires.private: QtSparql
 Cflags: -I${includedir}/contactsd-1.0
 Libs: -L${libdir} -module -avoid-version

@@ -9,19 +9,13 @@ Source0: %{name}-%{version}.tar.bz2
 Source1: contactsd.desktop
 Source2: contactsd.service
 BuildRequires: pkgconfig(QtCore)
-BuildRequires: pkgconfig(QtSparql)
-BuildRequires: pkgconfig(QtSparqlTrackerExtensions)
-BuildRequires: pkgconfig(tracker-sparql-0.14)
 BuildRequires: pkgconfig(TelepathyQt4)
 BuildRequires: pkgconfig(QtContacts)
-BuildRequires: pkgconfig(cubi-0.1)
 # mlite required only for tests
 BuildRequires: pkgconfig(mlite)
 BuildRequires: pkgconfig(mlocale)
 BuildRequires: pkgconfig(libmkcal)
 BuildRequires: pkgconfig(telepathy-glib)
-BuildRequires: libcubi-tracker-ontologies-devel
-BuildRequires: libqtcontacts-tracker-extensions-devel
 
 %description
 contactsd is a service for collecting and observing changes in roster list
