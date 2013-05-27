@@ -39,8 +39,7 @@ tracker-control -r > /dev/null
 ut_pid=$!
 
 # Wait for AM to appear on the bus
-# FIXME: It is ugly to hardcode such path
-/usr/lib/mission-control/mcclient6-wait-for-name "org.freedesktop.Telepathy.AccountManager"
+mc-wait-for-name "org.freedesktop.Telepathy.AccountManager"
 
 # Start Contacts Daemon in background
 export CONTACTSD_PLUGINS_DIRS=@PLUGINDIR@
