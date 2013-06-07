@@ -138,11 +138,8 @@ for infile in $infiles; do
         > $TOP_BUILDDIR/$infile
 done
 
-# run qmake
-qmake $relpath/contactsd.pro
-
 echo
-echo "contactsd is now configured for building. Just run 'make'."
+echo "contactsd is now configured for building. Now run 'qmake' and then 'make'."
 echo "Once everything is built, you must run 'make install'."
 echo "contactsd will be installed into $PREFIX"
 echo

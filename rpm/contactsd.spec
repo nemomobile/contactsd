@@ -65,6 +65,7 @@ Requires: %{name} = %{version}-%{release}
 
 %build
 ./configure --bindir %{_bindir} --libdir %{_libdir} --includedir %{_includedir}
+%qmake
 make %{?_smp_mflags}
 
 
