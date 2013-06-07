@@ -86,18 +86,18 @@ static void setupUnixSignalHandlers()
 
     sigterm.sa_handler = ContactsDaemon::unixSignalHandler;
     sigemptyset(&sigterm.sa_mask);
-    sigterm.sa_flags |= SA_RESTART;
+    sigterm.sa_flags = SA_RESTART;
 
-    if (sigaction(SIGTERM, &sigterm, 0) > 0) {
+    if (sigaction(SIGTERM, &sigterm, 0) < 0) {
         qWarning() << "Could not setup signal handler for SIGTERM";
         return;
     }
 
     sigint.sa_handler = ContactsDaemon::unixSignalHandler;
     sigemptyset(&sigint.sa_mask);
-    sigint.sa_flags |= SA_RESTART;
+    sigint.sa_flags = SA_RESTART;
 
-    if (sigaction(SIGINT, &sigint, 0) > 0) {
+    if (sigaction(SIGINT, &sigint, 0) < 0) {
         qWarning() << "Could not setup signal handler for SIGINT";
         return;
     }
