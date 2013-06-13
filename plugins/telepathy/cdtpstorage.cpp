@@ -255,7 +255,12 @@ const QLatin1String QContactOnlineAccount__FieldEnabled("Enabled");
 
 QContactManager *manager()
 {
+#ifdef USING_QTPIM
+    // Temporary override until qtpim supports QTCONTACTS_MANAGER_OVERRIDE
+    static QContactManager *manager = new QContactManager(QStringLiteral("org.nemomobile.contacts.sqlite"));
+#else
     static QContactManager *manager = new QContactManager;
+#endif
     return manager;
 }
 

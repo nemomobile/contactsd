@@ -1,5 +1,5 @@
 Name: contactsd-qt5
-Version: 1.4.0
+Version: 1.4.1
 Release: 1
 Summary: Telepathy <> QtContacts bridge for contacts
 Group: System/Libraries
