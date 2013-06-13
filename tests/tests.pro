@@ -20,6 +20,8 @@
 # Alternatively, this file may be used in accordance with the terms and
 # conditions contained in a signed written agreement between you and Nokia.
 
+include(common/packagename.pri)
+
 TEMPLATE = subdirs
 CONFIG += ordered
 
@@ -32,12 +34,12 @@ testxml.commands = sh $$PWD/mktests.sh $$UNIT_TESTS >$@ || rm -f $@
 testxml.depends = $$UNIT_TESTS
 
 install_testxml.files = $$testxml.target
-install_testxml.path = /opt/tests/contactsd/test-definition/
+install_testxml.path = /opt/tests/$${PACKAGENAME}/test-definition/
 install_testxml.depends = $$testxml.target
 install_testxml.CONFIG = no_check_exist
 
 install_extrascripts.files = with-session-bus.sh session.conf
-install_extrascripts.path = /opt/tests/contactsd/
+install_extrascripts.path = /opt/tests/$${PACKAGENAME}/
 install_extrascripts.depends = $$UNIT_TESTS
 install_extrascripts.CONFIG = no_check_exist
 

@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Contacts daemon
+Exec=/usr/bin/contactsd
+Comment=Telepathy contacts observer
+X-Moblin-Priority=Low
+X-Meego-Watchdog=Restart

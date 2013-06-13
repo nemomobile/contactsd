@@ -33,20 +33,37 @@
 
 using namespace Contactsd;
 
+#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
+static QtMessageHandler defaultMsgHandler = 0;
+static QtMsgType messageThreshold = QtWarningMsg;
+#else
 static QtMsgHandler defaultMsgHandler = 0;
 static QtMsgType messageThreshold = QtWarningMsg;
+#endif
 static FILE *messageLog = NULL;
 
+#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
+static void customMessageHandler(QtMsgType type, const QMessageLogContext &ctxt, const QString &msgStr)
+#else
 static void customMessageHandler(QtMsgType type, const char *msg)
+#endif
 {
     if (type < messageThreshold) {
         return; // no debug messages please
     }
 
+#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
+    const char *msg = msgStr.toLocal8Bit().constData();
+#endif
+
     // Actually qInstallMsgHandler() returned null in main() when
     // I checked, so defaultMsgHandler should be null - but let's be careful.
     if (defaultMsgHandler) {
+#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
+        defaultMsgHandler(type, ctxt, msgStr);
+#else
         defaultMsgHandler(type, msg);
+#endif
     } else {
         fprintf(stderr, "%s\n", msg);
     }
@@ -89,7 +106,7 @@ static void setupUnixSignalHandlers()
     sigterm.sa_flags = SA_RESTART;
 
     if (sigaction(SIGTERM, &sigterm, 0) < 0) {
-        qWarning() << "Could not setup signal handler for SIGTERM";
+        warning() << "Could not setup signal handler for SIGTERM";
         return;
     }
 
@@ -98,7 +115,7 @@ static void setupUnixSignalHandlers()
     sigint.sa_flags = SA_RESTART;
 
     if (sigaction(SIGINT, &sigint, 0) < 0) {
-        qWarning() << "Could not setup signal handler for SIGINT";
+        warning() << "Could not setup signal handler for SIGINT";
         return;
     }
 }
@@ -129,7 +146,7 @@ int main(int argc, char **argv)
             value.replace(" ", ",");
             plugins << value.split(",", QString::SkipEmptyParts);
         } else if (arg == "--version") {
-            qDebug() << "contactsd version" << VERSION;
+            debug() << "contactsd version" << VERSION;
             return 0;
         } else if (arg == "--help") {
             usage();
@@ -144,7 +161,7 @@ int main(int argc, char **argv)
 
             logFileName = args.at(i);
         } else {
-            qWarning() << "Invalid argument" << arg;
+            warning() << "Invalid argument" << arg;
             usage();
             return -1;
         }
@@ -159,7 +176,11 @@ int main(int argc, char **argv)
         messageLog = fopen(qPrintable(logFileName), "w");
     }
 
+#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
+    defaultMsgHandler = qInstallMessageHandler(customMessageHandler);
+#else
     defaultMsgHandler = qInstallMsgHandler(customMessageHandler);
+#endif
 
     enableDebug(logConsole);
     debug() << "contactsd version" << VERSION << "started";

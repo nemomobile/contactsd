@@ -114,7 +114,7 @@ void CDTpAvatarUpdate::onRequestFinished()
                                                                : mNetworkReply->url()).toString();
 
     QByteArray avatarHash = QCryptographicHash::hash(avatarUrl.toUtf8(), QCryptographicHash::Sha1);
-    QFile avatarFile(mCacheDir.absoluteFilePath(QString::fromAscii(avatarHash.toHex())));
+    QFile avatarFile(mCacheDir.absoluteFilePath(QString::fromLatin1(avatarHash.toHex())));
 
     // Check for existing avatar file and its size to see if we need to fetch from network.
     const qint64 contentLength = mNetworkReply->header(QNetworkRequest::ContentLengthHeader).toLongLong();

@@ -22,24 +22,24 @@
 
 daemon.target = with-daemon.sh
 daemon.depends = $$PWD/with-daemon.sh.in
-daemon.path = /opt/tests/contactsd
+daemon.path = /opt/tests/$${PACKAGENAME}
 daemon.commands = \
     sed -e \"s,@BINDIR@,$$BINDIR,g\" \
-        -e \"s,@PLUGINDIR@,$$LIBDIR/contactsd-1.0/plugins,g\" \
+        -e \"s,@PLUGINDIR@,$$LIBDIR/$${PACKAGENAME}-1.0/plugins,g\" \
     $< > $@ && chmod +x $@ || rm -f $@
 
 wrapper.target = ut_birthdayplugin-wrapper.sh
 wrapper.depends = $$PWD/ut_birthdayplugin-wrapper.sh.in
-wrapper.path = /opt/tests/contactsd/ut_birthdayplugin
+wrapper.path = /opt/tests/$${PACKAGENAME}/ut_birthdayplugin
 wrapper.commands = \
-    sed -e \"s,@SCRIPTDIR@,/opt/tests/contactsd,g\" \
-        -e \"s,@OUT_SCRIPTDIR@,/opt/tests/contactsd,g\" \
+    sed -e \"s,@SCRIPTDIR@,/opt/tests/$${PACKAGENAME},g\" \
+        -e \"s,@OUT_SCRIPTDIR@,/opt/tests/$${PACKAGENAME},g\" \
         -e \"s,@BINDIR@,$$BINDIR,g\" \
         -e \"s,@WITH_DAEMON@,$$daemon.target,g\" \
     $< > $@ && chmod +x $@ || rm -f $@
 
 install_extrascripts.files = $$wrapper.target $$daemon.target
-install_extrascripts.path = /opt/tests/contactsd/ut_birthdayplugin
+install_extrascripts.path = /opt/tests/$${PACKAGENAME}/ut_birthdayplugin
 install_extrascripts.depends = daemon wrapper
 install_extrascripts.CONFIG = no_check_exist
 

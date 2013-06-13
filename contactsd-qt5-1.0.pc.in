@@ -1,0 +1,12 @@
+prefix=@PREFIX@
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+plugindir=${prefix}/lib/contactsd-qt5-1.0/plugins
+includedir=${prefix}/include
+moc_includedir=${includedir}/contactsd-qt5-1.0
+
+Name: contactsd-qt5
+Description: Contact synchronization daemon for meego
+Version: @VERSION@
+Cflags: -I${includedir}/contactsd-qt5-1.0
+Libs: -L${libdir} -module -avoid-version

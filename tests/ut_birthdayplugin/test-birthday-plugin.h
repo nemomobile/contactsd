@@ -32,11 +32,18 @@
 #include <QContact>
 #include <QContactManager>
 
+#ifdef USING_QTPIM
+QTCONTACTS_USE_NAMESPACE
+#else
 QTM_USE_NAMESPACE
+#endif
 
 class TestBirthdayPlugin : public QObject
 {
     Q_OBJECT
+#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
+    Q_PLUGIN_METADATA(IID "org.nemomobile.contactsd.test-birthday")
+#endif
 
 public:
     explicit TestBirthdayPlugin(QObject *parent = 0);
@@ -65,7 +72,11 @@ private:
 
 private:
     QContactManager *mManager;
-    QSet<QContactLocalId> mContactLocalIDs;
+#ifdef USING_QTPIM
+    QSet<QContactId> mContactIDs;
+#else
+    QSet<QContactLocalId> mContactIDs;
+#endif
 };
 
 #endif // TEST_BIRTHDAYPLUGIN_H

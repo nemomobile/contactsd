@@ -20,25 +20,36 @@
 # Alternatively, this file may be used in accordance with the terms and
 # conditions contained in a signed written agreement between you and Nokia.
 
+include(../common/test-common.pri)
+
 PRE_TARGETDEPS += ../libtelepathy/libtelepathy.a
 
 TARGET = ut_telepathyplugin
-target.path = /opt/tests/contactsd
+target.path = /opt/tests/$${PACKAGENAME}
 
 include(check.pri)
 include(tests.pri)
-include(../common/test-common.pri)
 
 TEMPLATE = app
 
-CONFIG += test qt mobility
+CONFIG += test qt
 QT += testlib dbus
 QT -= gui
-MOBILITY += contacts
 CONFIG += link_pkgconfig
-PKGCONFIG += TelepathyQt4 telepathy-glib
+PKGCONFIG += telepathy-glib
 DEFINES += QT_NO_KEYWORDS
 DEFINES += ENABLE_DEBUG
+
+equals(QT_MAJOR_VERSION, 4) {
+    CONFIG += mobility
+    MOBILITY += contacts
+    PKGCONFIG += TelepathyQt4
+}
+equals(QT_MAJOR_VERSION, 5) {
+    PKGCONFIG += Qt5Contacts
+    PKGCONFIG += TelepathyQt5
+    DEFINES *= USING_QTPIM
+}
 
 system(cp $$PWD/../../plugins/telepathy/com.nokia.contacts.buddymanagement.xml .)
 system(qdbusxml2cpp -c BuddyManagementInterface -p buddymanagementinterface.h:buddymanagementinterface.cpp com.nokia.contacts.buddymanagement.xml)

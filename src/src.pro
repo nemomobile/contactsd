@@ -21,7 +21,10 @@
 # conditions contained in a signed written agreement between you and Nokia.
 
 TEMPLATE = app
-TARGET = contactsd
+equals(QT_MAJOR_VERSION, 4): TARGET = contactsd
+equals(QT_MAJOR_VERSION, 5): TARGET = contactsd-qt5
+
+VERSIONED_TARGET = $$TARGET-1.0
 
 QT += dbus
 QT += gui # for QDesktopServices
@@ -50,15 +53,15 @@ SOURCES += main.cpp \
 
 DEFINES += VERSION=\\\"$${VERSION}\\\"
 DEFINES += CONTACTSD_LOG_DIR=\\\"$$LOCALSTATEDIR/log\\\"
-DEFINES += CONTACTSD_PLUGINS_DIR=\\\"$$LIBDIR/contactsd-1.0/plugins\\\"
+DEFINES += CONTACTSD_PLUGINS_DIR=\\\"$$LIBDIR/$${VERSIONED_TARGET}/plugins\\\"
 
 headers.files = BasePlugin base-plugin.h \
     Debug debug.h \
     ImportStateConst importstateconst.h
-headers.path = $$INCLUDEDIR/contactsd-1.0/Contactsd
+headers.path = $$INCLUDEDIR/$${VERSIONED_TARGET}/Contactsd
 
 xml.files = com.nokia.contacts.importprogress.xml
-xml.path = $$INCLUDEDIR/contactsd-1.0
+xml.path = $$INCLUDEDIR/$${VERSIONED_TARGET}
 
 target.path = $$BINDIR
 INSTALLS += target headers xml

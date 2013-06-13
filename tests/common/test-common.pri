@@ -21,3 +21,5 @@
 # conditions contained in a signed written agreement between you and Nokia.
 
 INCLUDEPATH += $$PWD
+
+include(packagename.pri)

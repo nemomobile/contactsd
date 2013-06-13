@@ -53,4 +53,6 @@ CDBirthdayPlugin::MetaData CDBirthdayPlugin::metaData()
     return data;
 }
 
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
 Q_EXPORT_PLUGIN2(birthdayplugin, CDBirthdayPlugin)
+#endif

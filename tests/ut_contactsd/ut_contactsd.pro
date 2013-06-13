@@ -52,7 +52,7 @@ SOURCES += test-contactsd.cpp \
     $$TOP_SOURCEDIR/src/debug.cpp \
     $$TOP_SOURCEDIR/src/base-plugin.cpp
 
-DEFINES += CONTACTSD_PLUGINS_DIR=\\\"$$LIBDIR/contactsd-1.0/plugins\\\"
+DEFINES += CONTACTSD_PLUGINS_DIR=\\\"$$LIBDIR/$${PACKAGENAME}-1.0/plugins\\\"
 
 #gcov stuff
 CONFIG(coverage):{

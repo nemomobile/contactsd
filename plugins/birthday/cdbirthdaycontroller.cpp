@@ -32,9 +32,17 @@
 #include <QContactBirthday>
 #include <QContactDetailFilter>
 #include <QContactFetchRequest>
+#ifdef USING_QTPIM
+#include <QContactIdFilter>
+#else
 #include <QContactLocalIdFilter>
+#endif
 
+#ifdef USING_QTPIM
+QTCONTACTS_USE_NAMESPACE
+#else
 QTM_USE_NAMESPACE
+#endif
 
 using namespace Contactsd;
 
@@ -44,12 +52,21 @@ CDBirthdayController::CDBirthdayController(QObject *parent)
     , mManager(0)
 {
     mManager = new QContactManager(this);
+#ifdef USING_QTPIM
+    connect(mManager, SIGNAL(contactsAdded(QList<QContactId>)),
+            SLOT(contactsChanged(QList<QContactId>)));
+    connect(mManager, SIGNAL(contactsChanged(QList<QContactId>)),
+            SLOT(contactsChanged(QList<QContactId>)));
+    connect(mManager, SIGNAL(contactsRemoved(QList<QContactId>)),
+            SLOT(contactsRemoved(QList<QContactId>)));
+#else
     connect(mManager, SIGNAL(contactsAdded(QList<QContactLocalId>)),
             SLOT(contactsChanged(QList<QContactLocalId>)));
     connect(mManager, SIGNAL(contactsChanged(QList<QContactLocalId>)),
             SLOT(contactsChanged(QList<QContactLocalId>)));
     connect(mManager, SIGNAL(contactsRemoved(QList<QContactLocalId>)),
             SLOT(contactsRemoved(QList<QContactLocalId>)));
+#endif
     connect(mManager, SIGNAL(dataChanged()), SLOT(updateAllBirthdays()));
 
     const CDBirthdayCalendar::SyncMode syncMode = stampFileExists() ? CDBirthdayCalendar::KeepOldDB :
@@ -64,14 +81,17 @@ CDBirthdayController::~CDBirthdayController()
 }
 
 void
-CDBirthdayController::contactsChanged(const QList<QContactLocalId>& contacts)
+CDBirthdayController::contactsChanged(const QList<ContactIdType>& contacts)
 {
     fetchContacts(contacts);
 }
 
-void CDBirthdayController::contactsRemoved(const QList<QContactLocalId>& contacts)
+#ifdef USING_QTPIM
+#else
+#endif
+void CDBirthdayController::contactsRemoved(const QList<ContactIdType>& contacts)
 {
-    foreach (const QContactLocalId &id, contacts)
+    foreach (const ContactIdType &id, contacts)
         mCalendar->deleteBirthday(id);
     mCalendar->save();
 }
@@ -115,7 +135,11 @@ CDBirthdayController::updateAllBirthdays()
 {
     // Fetch any contact with a birthday.
     QContactDetailFilter fetchFilter;
+#ifdef USING_QTPIM
+    fetchFilter.setDetailType(QContactBirthday::Type);
+#else
     fetchFilter.setDetailDefinitionName(QContactBirthday::DefinitionName);
+#endif
 
     fetchContacts(fetchFilter, SLOT(onFullSyncRequestStateChanged(QContactAbstractRequest::State)));
 }
@@ -134,9 +158,13 @@ CDBirthdayController::onFullSyncRequestStateChanged(QContactAbstractRequest::Sta
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 void
-CDBirthdayController::fetchContacts(const QList<QContactLocalId> &contactIds)
+CDBirthdayController::fetchContacts(const QList<ContactIdType> &contactIds)
 {
+#ifdef USING_QTPIM
+    QContactIdFilter fetchFilter;
+#else
     QContactLocalIdFilter fetchFilter;
+#endif
     fetchFilter.setIds(contactIds);
 
     fetchContacts(fetchFilter, SLOT(onFetchRequestStateChanged(QContactAbstractRequest::State)));
@@ -156,9 +184,16 @@ void
 CDBirthdayController::fetchContacts(const QContactFilter &filter, const char *slot)
 {
     QContactFetchHint fetchHint;
+#ifdef USING_QTPIM
+    static const QList<QContactDetail::DetailType> detailTypes = QList<QContactDetail::DetailType>() 
+        << QContactBirthday::Type
+        << QContactDisplayLabel::Type;
+    fetchHint.setDetailTypesHint(detailTypes);
+#else
     static const QStringList detailDefinitions = QStringList() << QContactBirthday::DefinitionName
                                                                << QContactDisplayLabel::DefinitionName;
     fetchHint.setDetailDefinitionsHint(detailDefinitions);
+#endif
     fetchHint.setOptimizationHints(QContactFetchHint::NoRelationships |
                                    QContactFetchHint::NoActionPreferences |
                                    QContactFetchHint::NoBinaryBlobs);
@@ -228,19 +263,29 @@ CDBirthdayController::processFetchRequest(QContactFetchRequest *const fetchReque
     return success;
 }
 
+#ifdef USING_QTPIM
+const QContactId &apiId(const QContact &contact) { return contact.id(); }
+#else
+QContactLocalId apiId(const QContact &contact) { return contact.localId(); }
+#endif
+
 void
 CDBirthdayController::updateBirthdays(const QList<QContact> &changedBirthdays)
 {
     foreach (const QContact &contact, changedBirthdays) {
         const QContactBirthday contactBirthday = contact.detail<QContactBirthday>();
+#ifdef USING_QTPIM
+        const QString contactDisplayLabel = contact.detail<QContactDisplayLabel>().label();
+#else
         const QString contactDisplayLabel = contact.displayLabel();
-        const CalendarBirthday calendarBirthday = mCalendar->birthday(contact.localId());
+#endif
+        const CalendarBirthday calendarBirthday = mCalendar->birthday(apiId(contact));
 
         // Display label or birthdate was removed from the contact, so delete it from the calendar.
         if (contactDisplayLabel.isEmpty() || contactBirthday.date().isNull()) {
             debug() << "Contact: " << contact << " removed birthday or displayLabel, so delete the calendar event";
 
-            mCalendar->deleteBirthday(contact.localId());
+            mCalendar->deleteBirthday(apiId(contact));
         // Display label or birthdate was changed on the contact, so update the calendar.
         } else if ((contactDisplayLabel != calendarBirthday.summary()) ||
                    (contactBirthday.date() != calendarBirthday.date())) {
@@ -256,18 +301,22 @@ CDBirthdayController::updateBirthdays(const QList<QContact> &changedBirthdays)
 void
 CDBirthdayController::syncBirthdays(const QList<QContact> &birthdayContacts)
 {
-    QHash<QContactLocalId, CalendarBirthday> oldBirthdays = mCalendar->birthdays();
+    QHash<ContactIdType, CalendarBirthday> oldBirthdays = mCalendar->birthdays();
 
     // Check all birthdays from the contacts if the stored calendar item is up-to-date
     foreach (const QContact &contact, birthdayContacts) {
+#ifdef USING_QTPIM
+        const QString contactDisplayLabel = contact.detail<QContactDisplayLabel>().label();
+#else
         const QString contactDisplayLabel = contact.displayLabel();
+#endif
 
         if (contactDisplayLabel.isNull()) {
             debug() << "Contact: " << contact << " has no displayLabel, so not syncing to calendar";
             continue;
         }
 
-        QHash<QContactLocalId, CalendarBirthday>::Iterator it = oldBirthdays.find(contact.localId());
+        QHash<ContactIdType, CalendarBirthday>::Iterator it = oldBirthdays.find(apiId(contact));
 
         if (oldBirthdays.end() != it) {
             const QContactBirthday contactBirthday = contact.detail<QContactBirthday>();
@@ -292,7 +341,7 @@ CDBirthdayController::syncBirthdays(const QList<QContact> &birthdayContacts)
     }
 
     // Remaining old birthdays in the calendar db do not did not match any contact, so remove them.
-    foreach(QContactLocalId id, oldBirthdays.keys()) {
+    foreach (const ContactIdType &id, oldBirthdays.keys()) {
         debug() << "Birthday with contact id" << id << "no longer has a matching contact, trashing it";
         mCalendar->deleteBirthday(id);
     }

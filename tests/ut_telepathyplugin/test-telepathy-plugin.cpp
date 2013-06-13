@@ -23,13 +23,18 @@
 
 #include <QContact>
 #include <QContactFetchByIdRequest>
-#include <QContactLocalIdFetchRequest>
 #include <QContactFetchRequest>
 #include <QContactRemoveRequest>
 #include <QContactSaveRequest>
 #include <QContactSyncTarget>
-#include <QContactLocalIdFilter>
 #include <QContactOnlineAccount>
+#ifdef USING_QTPIM
+#include <QContactIdFilter>
+#include <QContactIdFetchRequest>
+#else
+#include <QContactLocalIdFilter>
+#include <QContactLocalIdFetchRequest>
+#endif
 
 #include <TelepathyQt/Debug>
 
@@ -66,6 +71,17 @@ void TestTelepathyPlugin::initTestCase()
 
     /* Create a QContactManager and track added/changed contacts */
     mContactManager = new QContactManager;
+#ifdef USING_QTPIM
+    connect(mContactManager,
+            SIGNAL(contactsAdded(const QList<QContactId>&)),
+            SLOT(contactsAdded(const QList<QContactId>&)));
+    connect(mContactManager,
+            SIGNAL(contactsChanged(const QList<QContactId>&)),
+            SLOT(contactsChanged(const QList<QContactId>&)));
+    connect(mContactManager,
+            SIGNAL(contactsRemoved(const QList<QContactId>&)),
+            SLOT(contactsRemoved(const QList<QContactId>&)));
+#else
     connect(mContactManager,
             SIGNAL(contactsAdded(const QList<QContactLocalId>&)),
             SLOT(contactsAdded(const QList<QContactLocalId>&)));
@@ -75,7 +91,8 @@ void TestTelepathyPlugin::initTestCase()
     connect(mContactManager,
             SIGNAL(contactsRemoved(const QList<QContactLocalId>&)),
             SLOT(contactsRemoved(const QList<QContactLocalId>&)));
-    mLocalContactIds += mContactManager->selfContactId();
+#endif
+    mContactIds += mContactManager->selfContactId();
 
     /* Create a fake AccountManager */
     TpDBusDaemon *dbus = tp_dbus_daemon_dup(NULL);
@@ -144,10 +161,10 @@ void TestTelepathyPlugin::cleanup()
     tp_tests_simple_account_removed(mAccount);
 
     /* Wait for all contacts to disappear, and local contacts to get updated */
-    runExpectation(TestExpectationCleanupPtr(new TestExpectationCleanup(mLocalContactIds.count() - mNOnlyLocalContacts)));
+    runExpectation(TestExpectationCleanupPtr(new TestExpectationCleanup(mContactIds.count() - mNOnlyLocalContacts)));
 
     /* Remove remaining local contacts */
-    QList<QContactLocalId> contactsToRemove = mLocalContactIds;
+    QList<ContactIdType> contactsToRemove = mContactIds;
     contactsToRemove.removeOne(mContactManager->selfContactId());
     if (!contactsToRemove.isEmpty()) {
         QContactRemoveRequest *request = new QContactRemoveRequest();
@@ -157,7 +174,7 @@ void TestTelepathyPlugin::cleanup()
         runExpectation(TestExpectationMassPtr(new TestExpectationMass(0, 0, contactsToRemove.count())));
     }
 
-    QVERIFY(mLocalContactIds.count() == 1);
+    QVERIFY(mContactIds.count() == 1);
 
     g_object_unref(mConnService);
     g_object_unref(mConnection);
@@ -405,7 +422,7 @@ void TestTelepathyPlugin::testRemoveBuddyDBusAPI()
 
     // Set account offline to test offline removal
     tp_cli_connection_call_disconnect(mConnection, -1, NULL, NULL, NULL, NULL);
-    TestExpectationDisconnectPtr exp3(new TestExpectationDisconnect(mLocalContactIds.count()));
+    TestExpectationDisconnectPtr exp3(new TestExpectationDisconnect(mContactIds.count()));
     runExpectation(exp3);
 
     // Remove buddy2 when account is offline
@@ -444,7 +461,7 @@ void TestTelepathyPlugin::testSetOffline()
 
     tp_cli_connection_call_disconnect(mConnection, -1, NULL, NULL, NULL, NULL);
 
-    runExpectation(TestExpectationDisconnectPtr(new TestExpectationDisconnect(mLocalContactIds.count())));
+    runExpectation(TestExpectationDisconnectPtr(new TestExpectationDisconnect(mContactIds.count())));
 }
 
 void TestTelepathyPlugin::testAvatar()
@@ -592,7 +609,11 @@ void TestTelepathyPlugin::testBug253679()
     QContact contact;
     QContactOnlineAccount onlineAccount;
     onlineAccount.setAccountUri(id);
+#ifdef USING_QTPIM
+    // TODO
+#else
     onlineAccount.setValue(QLatin1String("AccountPath"), QLatin1String(ACCOUNT_PATH));
+#endif
     contact.saveDetail(&onlineAccount);
 
     QContactSaveRequest *request = new QContactSaveRequest();
@@ -640,9 +661,9 @@ void TestTelepathyPlugin::testMergedContact()
 #if 0
     const QList<QContactLocalId> mergeIds = QList<QContactLocalId>() << contact2.localId();
     mergeContacts(contact1, mergeIds);
-    exp1->verifyLocalId(contact1.localId());
+    exp1->verifyContactId(contact1);
     exp1->verifyGenerator("telepathy");
-    exp2->verifyLocalId(contact1.localId());
+    exp2->verifyContactId(contact1);
     exp2->verifyGenerator("telepathy");
     const QList<TestExpectationContactPtr> expectations = QList<TestExpectationContactPtr>() << exp1 << exp2;
     runExpectation(TestExpectationMergePtr(new TestExpectationMerge(contact1.localId(), mergeIds, expectations)));
@@ -656,7 +677,7 @@ void TestTelepathyPlugin::testMergedContact()
         TP_TESTS_CONTACTS_CONNECTION (mConnService),
         1, &handle1, &presence, &message);
     TestExpectationContactPtr exp4(new TestExpectationContact(EventChanged));
-    exp4->verifyLocalId(contact1.localId());
+    exp4->verifyContactId(contact1);
     exp4->verifyPresence(presence);
     runExpectation(exp4);
 
@@ -742,7 +763,7 @@ void TestTelepathyPlugin::testBenchmark()
     /* Set account offline */
     tp_cli_connection_call_disconnect(mConnection, -1, NULL, NULL, NULL, NULL);
 
-    runExpectation(TestExpectationDisconnectPtr(new TestExpectationDisconnect(mLocalContactIds.count())));
+    runExpectation(TestExpectationDisconnectPtr(new TestExpectationDisconnect(mContactIds.count())));
 }
 
 TpHandle TestTelepathyPlugin::ensureHandle(const gchar *id)
@@ -795,37 +816,36 @@ void TestTelepathyPlugin::runExpectation(TestExpectationPtr exp)
     mExpectation = TestExpectationPtr();
 }
 
-void TestTelepathyPlugin::contactsAdded(const QList<QContactLocalId>& contactIds)
+void TestTelepathyPlugin::contactsAdded(const QList<ContactIdType>& contactIds)
 {
     debug() << "Got contactsAdded";
-    Q_FOREACH (const QContactLocalId &id, contactIds) {
-        QVERIFY(!mLocalContactIds.contains(id));
-        mLocalContactIds << id;
+    Q_FOREACH (const ContactIdType &id, contactIds) {
+        QVERIFY(!mContactIds.contains(id));
+        mContactIds << id;
     }
     verify(EventAdded, contactIds);
 }
 
-void TestTelepathyPlugin::contactsChanged(const QList<QContactLocalId>& contactIds)
+void TestTelepathyPlugin::contactsChanged(const QList<ContactIdType>& contactIds)
 {
     debug() << "Got contactsChanged";
-    Q_FOREACH (const QContactLocalId &id, contactIds) {
-        QVERIFY(mLocalContactIds.contains(id));
+    Q_FOREACH (const ContactIdType &id, contactIds) {
+        QVERIFY(mContactIds.contains(id));
     }
     verify(EventChanged, contactIds);
 }
 
-void TestTelepathyPlugin::contactsRemoved(const QList<QContactLocalId>& contactIds)
+void TestTelepathyPlugin::contactsRemoved(const QList<ContactIdType>& contactIds)
 {
     debug() << "Got contactsRemoved";
-    Q_FOREACH (const QContactLocalId &id, contactIds) {
-        QVERIFY(mLocalContactIds.contains(id));
-        mLocalContactIds.removeOne(id);
+    Q_FOREACH (const ContactIdType &id, contactIds) {
+        QVERIFY(mContactIds.contains(id));
+        mContactIds.removeOne(id);
     }
     verify(EventRemoved, contactIds);
 }
 
-void TestTelepathyPlugin::verify(Event event,
-    const QList<QContactLocalId> &contactIds)
+void TestTelepathyPlugin::verify(Event event, const QList<ContactIdType> &contactIds)
 {
     QVERIFY(mExpectation != 0);
     mExpectation->verify(event, contactIds);

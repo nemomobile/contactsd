@@ -32,6 +32,7 @@
 #include "debug.h"
 
 #include <unistd.h>
+#include <errno.h>
 #include <sys/socket.h>
 
 using namespace Contactsd;
@@ -106,7 +107,9 @@ void ContactsDaemon::unixSignalHandler(int)
 {
     // Write a byte on the socket to activate the socket listener
     char a = 1;
-    ::write(sigFd[0], &a, sizeof(a));
+    if (::write(sigFd[0], &a, sizeof(a)) != sizeof(a)) {
+        warning() << "Unable to write to sigFd" << errno;
+    }
 }
 
 void ContactsDaemon::onUnixSignalReceived()
@@ -116,7 +119,9 @@ void ContactsDaemon::onUnixSignalReceived()
 
     // Empty the socket buffer
     char dummy;
-    ::read(sigFd[1], &dummy, sizeof(dummy));
+    if (::read(sigFd[1], &dummy, sizeof(dummy)) != sizeof(dummy)) {
+        warning() << "Unable to complete read from sigFd" << errno;
+    }
 
     debug() << "Received quit signal";
 

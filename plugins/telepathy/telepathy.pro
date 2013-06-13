@@ -24,8 +24,18 @@ TEMPLATE = lib
 QT -= gui
 QT += dbus network
 
-CONFIG += plugin mobility
-MOBILITY += contacts
+CONFIG += plugin link_pkgconfig
+
+equals(QT_MAJOR_VERSION, 4) {
+    CONFIG += mobility
+    MOBILITY += contacts
+    PKGCONFIG += TelepathyQt4
+}
+equals(QT_MAJOR_VERSION, 5) {
+    PKGCONFIG += Qt5Contacts
+    PKGCONFIG += TelepathyQt5
+    DEFINES *= USING_QTPIM
+}
 
 system(qdbusxml2cpp -c BuddyManagementAdaptor -a buddymanagementadaptor.h:buddymanagementadaptor.cpp com.nokia.contacts.buddymanagement.xml)
 
@@ -34,8 +44,6 @@ QMAKE_CXXFLAGS += -c -g  --coverage -ftest-coverage -fprofile-arcs
 LIBS += -lgcov
 }
 
-CONFIG += link_pkgconfig
-PKGCONFIG += TelepathyQt4 
 DEFINES += QT_NO_CAST_TO_ASCII QT_NO_CAST_FROM_ASCII
 
 INCLUDEPATH += $$TOP_SOURCEDIR/src
@@ -63,11 +71,14 @@ SOURCES  = cdtpaccount.cpp \
     buddymanagementadaptor.cpp \
     cdtpavatarupdate.cpp
 
+equals(QT_MAJOR_VERSION, 4): VERSIONED_PACKAGENAME=contactsd-1.0
+equals(QT_MAJOR_VERSION, 5): VERSIONED_PACKAGENAME=contactsd-qt5-1.0
+
 TARGET = telepathyplugin
-target.path = $$LIBDIR/contactsd-1.0/plugins
+target.path = $$LIBDIR/$${VERSIONED_PACKAGENAME}/plugins
 
 xml.files = com.nokia.contacts.buddymanagement.xml
-xml.path = $$INCLUDEDIR/contactsd-1.0
+xml.path = $$INCLUDEDIR/$${VERSIONED_PACKAGENAME}
 
 INSTALLS += target xml
 

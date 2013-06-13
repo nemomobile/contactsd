@@ -54,6 +54,13 @@ static void loopWait(int ms)
     loop.exec();
 }
 
+#ifdef USING_QTPIM
+QContactId apiId(const QContact &contact) { return contact.id(); }
+#else
+QContactLocalId apiId(const QContact &contact) { return contact.localId(); }
+#endif
+
+
 TestBirthdayPlugin::TestBirthdayPlugin(QObject *parent) :
     QObject(parent),
     mManager(0)
@@ -62,10 +69,7 @@ TestBirthdayPlugin::TestBirthdayPlugin(QObject *parent) :
 
 void TestBirthdayPlugin::init()
 {
-    const QLatin1String trackerManagerName = QLatin1String("tracker");
-
-    mManager = new QContactManager(trackerManagerName, QMap<QString, QString>(), this);
-    QVERIFY2(mManager->managerName() == trackerManagerName, "Unable to initialise QContactManager");
+    mManager = new QContactManager;
 }
 
 void TestBirthdayPlugin::initTestCase()
@@ -79,7 +83,7 @@ void TestBirthdayPlugin::testAddAndRemoveBirthday()
 
     // Add contact with birthday to tracker.
     QContactName contactName;
-    contactName.setCustomLabel(contactID);
+    contactName.setFirstName(contactID);
     QContactBirthday contactBirthday;
     contactBirthday.setDateTime(contactBirthDate);
     QContact contact;
@@ -104,7 +108,7 @@ void TestBirthdayPlugin::testAddAndRemoveBirthday()
     QCOMPARE(countCalendarEvents(eventList, contact), 1);
 
     // Delete the contact and see if the birthday is also deleted.
-    QVERIFY2(mManager->removeContact(contact.localId()), "Unable to delete test contact from tracker database");
+    QVERIFY2(mManager->removeContact(apiId(contact)), "Unable to delete test contact from tracker database");
 
     // Wait until calendar event gets to calendar.
     loopWait(calendarTimeout);
@@ -125,7 +129,7 @@ void TestBirthdayPlugin::testChangeBirthday()
 
     // Add contact with birthday to tracker.
     QContactName contactName;
-    contactName.setCustomLabel(contactID);
+    contactName.setFirstName(contactID);
     QContactBirthday contactBirthday;
     contactBirthday.setDateTime(contactBirthDate);
     QContact contact;
@@ -173,7 +177,7 @@ void TestBirthdayPlugin::testChangeName()
 
     // Add contact with birthday to tracker.
     QContactName contactName;
-    contactName.setCustomLabel(contactID);
+    contactName.setFirstName(contactID);
     QContactBirthday contactBirthday;
     contactBirthday.setDateTime(contactBirthDate);
     QContact contact;
@@ -199,10 +203,10 @@ void TestBirthdayPlugin::testChangeName()
 
     // Change the contact name and see if the calendar is updated.
     const QString newContactID = QUuid::createUuid().toString();
-    contactName.setCustomLabel(newContactID);
+    contactName.setFirstName(newContactID);
     QVERIFY(contact.saveDetail(&contactName));
     // TODO: Should it be necessary to refetch the contact to get the synthesised displayLabel?
-    contact = mManager->contact(contact.localId());
+    contact = mManager->contact(apiId(contact));
     QVERIFY2(mManager->saveContact(&contact), "Unable to update test contact in tracker");
 
     // Wait until calendar event gets to calendar.
@@ -277,7 +281,7 @@ void TestBirthdayPlugin::testLeapYears()
 
     // Add contact with birthday to tracker.
     QContactName contactName;
-    contactName.setCustomLabel(contactID);
+    contactName.setFirstName(contactID);
     QContactBirthday contactBirthday;
     contactBirthday.setDate(contactBirthDate);
     QContact contact;
@@ -327,9 +331,9 @@ void TestBirthdayPlugin::cleanup()
 {
     // Remove all contacts modified during the test run.
     // This could fail if the contacts were already removed, so the response is ignored.
-    mManager->removeContacts(mContactLocalIDs.toList());
+    mManager->removeContacts(mContactIDs.toList());
 
-    mContactLocalIDs.clear();
+    mContactIDs.clear();
 
     delete mManager;
 
@@ -349,7 +353,11 @@ KCalCore::Event::List TestBirthdayPlugin::findCalendarEvents(const KCalCore::Eve
 
     Q_FOREACH(const KCalCore::Event::Ptr event, eventList) {
         if(event->dtStart().date() == contact.detail<QContactBirthday>().date()) {
+#ifdef USING_QTPIM
+            if(event->summary() == contact.detail<QContactDisplayLabel>().label()) {
+#else
             if(event->summary() == contact.displayLabel()) {
+#endif
                 matches += event;
             }
         }
@@ -363,7 +371,7 @@ bool TestBirthdayPlugin::saveContact(QContact &contact)
     const bool success = mManager->saveContact(&contact);
 
     if (success) {
-        mContactLocalIDs.insert(contact.localId());
+        mContactIDs.insert(apiId(contact));
     }
 
     return success;

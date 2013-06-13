@@ -28,6 +28,29 @@ else
     VERSION="$MAJOR_VERSION.$MINOR_VERSION.$MICRO_VERSION.$NANO_VERSION"
 fi
 
+# Qt Version
+QMAKE=`which qmake 2>/dev/null`
+
+if [ -z "$QMAKE" ] ; then
+	QMAKE=`which qmake-qt4 2>/dev/null`
+fi
+
+if [ -z "$QMAKE" ] ; then
+	echo
+	echo "You need qmake in your PATH to build contactsd"
+	echo "Cannot proceed."
+	exit 1
+fi
+
+export QMAKE
+
+QT_VERSION=`$QMAKE -query QT_VERSION`
+if [ -z "$QT_VERSION" ] ; then
+	echo
+	echo "Cannot proceed without QT_VERSION determined."
+	exit 1
+fi
+
 relpath=`dirname $0`
 relpath=`(cd "$relpath"; /bin/pwd)`
 outpath=`/bin/pwd`
@@ -120,8 +143,11 @@ TOP_BUILDDIR = \$\$quote($TOP_BUILDDIR)
 CONFIG += \$\$quote($ENABLE_COVERAGE)
 EOF
 
-infiles="contactsd-1.0.pc
-         tests/mktests.sh"
+case $QT_VERSION in
+    "5."*) infiles="contactsd-qt5-1.0.pc tests/mktests.sh" ;;
+    *) infiles="contactsd-1.0.pc tests/mktests.sh" ;;
+esac
+
 for infile in $infiles; do
     echo "Generating $infile"
     # pre-process .in files

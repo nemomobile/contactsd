@@ -31,7 +31,11 @@
 #include <extendedstorage.h>
 #include <extendedcalendar.h>
 
+#ifdef USING_QTPIM
+QTCONTACTS_USE_NAMESPACE
+#else
 QTM_USE_NAMESPACE
+#endif
 
 class CalendarBirthday
 {
@@ -55,6 +59,12 @@ class CDBirthdayCalendar : public QObject
     Q_OBJECT
 
 public:
+#ifdef USING_QTPIM
+    typedef QContactId ContactIdType;
+#else
+    typedef QContactLocalId ContactIdType;
+#endif
+
     enum SyncMode {
         KeepOldDB,
         DropOldDB
@@ -68,21 +78,21 @@ public:
     void updateBirthday(const QContact &contact);
 
     //! Deletes \a contact birthday from calendar.
-    void deleteBirthday(QContactLocalId contactId);
+    void deleteBirthday(ContactIdType contactId);
 
     //! Actually save the events in the calendar database
     void save();
 
-    CalendarBirthday birthday(QContactLocalId contactId);
-    QHash<QContactLocalId, CalendarBirthday> birthdays();
+    CalendarBirthday birthday(ContactIdType contactId);
+    QHash<ContactIdType, CalendarBirthday> birthdays();
 
 private:
     mKCal::Notebook::Ptr createNotebook();
 
-    static QContactLocalId localContactId(const QString &calendarEventId);
-    static QString calendarEventId(QContactLocalId contactId);
+    static ContactIdType localContactId(const QString &calendarEventId);
+    static QString calendarEventId(ContactIdType contactId);
 
-    KCalCore::Event::Ptr calendarEvent(QContactLocalId contactId);
+    KCalCore::Event::Ptr calendarEvent(ContactIdType contactId);
 
 private Q_SLOTS:
     void onLocaleChanged();

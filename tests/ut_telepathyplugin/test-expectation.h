@@ -37,7 +37,13 @@
 
 #define ACCOUNT_PATH TP_ACCOUNT_OBJECT_PATH_BASE "fakecm/fakeproto/fakeaccount"
 
+#ifdef USING_QTPIM
+QTCONTACTS_USE_NAMESPACE
+typedef QContactId ContactIdType;
+#else
 QTM_USE_NAMESPACE
+typedef QContactLocalId ContactIdType;
+#endif
 
 typedef enum {
     EventAdded,
@@ -53,7 +59,7 @@ class TestExpectation : public QObject, public Tp::RefCounted
     Q_OBJECT
 
 public:
-    void verify(Event event, const QList<QContactLocalId> &contactIds);
+    void verify(Event event, const QList<ContactIdType> &contactIds);
 
     void setContactManager(QContactManager *contactManager) { mContactManager = contactManager; };
     QContactManager *contactManager() { return mContactManager; };
@@ -63,7 +69,7 @@ Q_SIGNALS:
 
 protected:
     virtual void verify(Event event, const QList<QContact> &contacts);
-    virtual void verify(Event event, const QList<QContactLocalId> &contactIds, QContactManager::Error error);
+    virtual void verify(Event event, const QList<ContactIdType> &contactIds, QContactManager::Error error);
     void emitFinished();
 
 private:
@@ -80,13 +86,13 @@ class TestFetchContacts : public QObject
     Q_OBJECT
 
 public:
-    TestFetchContacts(const QList<QContactLocalId> &contactIds, Event event, TestExpectation *exp);
+    TestFetchContacts(const QList<ContactIdType> &contactIds, Event event, TestExpectation *exp);
 
 private Q_SLOTS:
     void onContactsFetched();
 
 private:
-    QList<QContactLocalId> mContactIds;
+    QList<ContactIdType> mContactIds;
     Event mEvent;
     TestExpectation *mExp;
 };
@@ -113,7 +119,7 @@ public:
 
 protected:
     void verify(Event event, const QList<QContact> &contacts);
-    void verify(Event event, const QList<QContactLocalId> &contactIds, QContactManager::Error error);
+    void verify(Event event, const QList<ContactIdType> &contactIds, QContactManager::Error error);
 
 private:
     void maybeEmitFinished();
@@ -134,22 +140,29 @@ public:
     TestExpectationContact(Event event, QString accountUri = QString());
 
     QContact contact() { return mContact; };
-    void setEvent(Event event) { mEvent = event; };
+    void setEvent(const Event &event) { mEvent = event; };
     void resetVerifyFlags() { mFlags = 0; };
 
-    void verifyAlias(QString alias) { mAlias = alias; mFlags |= VerifyAlias; };
+    void verifyAlias(const QString &alias) { mAlias = alias; mFlags |= VerifyAlias; };
     void verifyPresence(TpTestsContactsConnectionPresenceStatusIndex presence) { mPresence = presence; mFlags |= VerifyPresence; };
-    void verifyAvatar(QByteArray avatarData) { mAvatarData = avatarData; mFlags |= VerifyAvatar; };
-    void verifyAuthorization(QString subscriptionState, QString publishState) { mSubscriptionState = subscriptionState; mPublishState = publishState; mFlags |= VerifyAuthorization; };
+    void verifyAvatar(const QByteArray &avatarData) { mAvatarData = avatarData; mFlags |= VerifyAvatar; };
+    void verifyAuthorization(const QString &subscriptionState, const QString &publishState) { mSubscriptionState = subscriptionState; mPublishState = publishState; mFlags |= VerifyAuthorization; };
     void verifyInfo(GPtrArray *contactInfo) { mContactInfo = contactInfo; mFlags |= VerifyInfo; };
-    void verifyLocalId(QContactLocalId localId) { mLocalId = localId; mFlags |= VerifyLocalId; };
-    void verifyGenerator(QString generator) { mGenerator = generator; mFlags |= VerifyGenerator; };
+    void verifyContactId(const QContact &contact) {
+#ifdef USING_QTPIM
+        mContactId = contact.id();
+#else
+        mContactId = contact.localId();
+#endif
+        mFlags |= VerifyContactId;
+    };
+    void verifyGenerator(const QString &generator) { mGenerator = generator; mFlags |= VerifyGenerator; };
 
-    void verify(QContact contact);
+    void verify(const QContact &contact);
 
 protected:
     void verify(Event event, const QList<QContact> &contacts);
-    void verify(Event event, const QList<QContactLocalId> &contactIds, QContactManager::Error error);
+    void verify(Event event, const QList<ContactIdType> &contactIds, QContactManager::Error error);
 
 private:
     enum VerifyFlags {
@@ -159,7 +172,7 @@ private:
         VerifyAvatar         = (1 << 2),
         VerifyAuthorization  = (1 << 3),
         VerifyInfo           = (1 << 4),
-        VerifyLocalId        = (1 << 5),
+        VerifyContactId      = (1 << 5),
         VerifyGenerator      = (1 << 6),
         VerifyAll            = (1 << 7) - 1
     };
@@ -176,7 +189,7 @@ private:
     QString mSubscriptionState;
     QString mPublishState;
     GPtrArray *mContactInfo;
-    QContactLocalId mLocalId;
+    ContactIdType mContactId;
     QString mGenerator;
 
     QContact mContact;
@@ -208,18 +221,18 @@ class TestExpectationMerge : public TestExpectation
     Q_OBJECT
 
 public:
-    TestExpectationMerge(const QContactLocalId masterId, const QList<QContactLocalId> mergeIds,
+    TestExpectationMerge(const ContactIdType &masterId, const QList<ContactIdType> &mergeIds,
             const QList<TestExpectationContactPtr> expectations = QList<TestExpectationContactPtr>());
 
 protected:
     void verify(Event event, const QList<QContact> &contacts);
-    void verify(Event event, const QList<QContactLocalId> &contactIds, QContactManager::Error error);
+    void verify(Event event, const QList<ContactIdType> &contactIds, QContactManager::Error error);
 
 private:
     void maybeEmitFinished();
 
-    QContactLocalId mMasterId;
-    QList<QContactLocalId> mMergeIds;
+    ContactIdType mMasterId;
+    QList<ContactIdType> mMergeIds;
     bool mGotMergedContact;
     QList<TestExpectationContactPtr> mContactExpectations;
 };
@@ -236,7 +249,7 @@ public:
 
 protected:
     void verify(Event event, const QList<QContact> &contacts);
-    void verify(Event event, const QList<QContactLocalId> &contactIds, QContactManager::Error error);
+    void verify(Event event, const QList<ContactIdType> &contactIds, QContactManager::Error error);
 
 private:
     void maybeEmitFinished();

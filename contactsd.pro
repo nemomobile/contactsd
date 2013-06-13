@@ -4,11 +4,16 @@ QT -= gui
 
 SUBDIRS += src plugins tests
 
+equals(QT_MAJOR_VERSION, 4): PACKAGENAME=contactsd
+equals(QT_MAJOR_VERSION, 5): PACKAGENAME=contactsd-qt5
+
+PKGCONFIG_FILE=$${PACKAGENAME}-1.0.pc
+
 pkgconfig.path=$$LIBDIR/pkgconfig
-pkgconfig.files=contactsd-1.0.pc
+pkgconfig.files=$${PKGCONFIG_FILE}
 
 backupconf.path=$$PREFIX/share/backup-framework/applications/
-backupconf.files=contactsd.conf
+backupconf.files=$${PACKAGENAME}.conf
 
 INSTALLS += pkgconfig backupconf
 
@@ -19,7 +24,7 @@ QMAKE_EXTRA_TARGETS += check
 confclean.depends += distclean
 confclean.commands += \
     $(DEL_FILE) $$TOP_BUILDDIR/.qmake.cache \
-    $(DEL_FILE) $$TOP_BUILDDIR/contactsd-1.0.pc
+    $(DEL_FILE) $$TOP_BUILDDIR/$${PKGCONFIG_FILE}
 QMAKE_EXTRA_TARGETS += confclean
 
 OTHER_FILES += configure

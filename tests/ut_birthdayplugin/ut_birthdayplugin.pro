@@ -20,25 +20,36 @@
 # Alternatively, this file may be used in accordance with the terms and
 # conditions contained in a signed written agreement between you and Nokia.
 
+include(../common/test-common.pri)
+
 TARGET = ut_birthdayplugin
-target.path = /opt/tests/contactsd
+target.path = /opt/tests/$${PACKAGENAME}
 
 include(check.pri)
 include(tests.pri)
-include(../common/test-common.pri)
 
 # Hack: mkcal adds /usr/include/meegotouch to include path, and alphabetic CONFIG
 # always puts that before mlocale, resulting in link errors. Force mlocale to be
 # first.
-INCLUDEPATH += /usr/include/mlocale
+equals(QT_MAJOR_VERSION, 4): INCLUDEPATH += /usr/include/mlocale
+equals(QT_MAJOR_VERSION, 5): INCLUDEPATH += /usr/include/mlocale5
 
-CONFIG += test mobility mlocale mkcal link_pkgconfig
-PKGCONFIG += mlite
+CONFIG += test link_pkgconfig
 
 QT -= gui
 QT += testlib
-MOBILITY = contacts
 DEFINES += ENABLE_DEBUG
+
+equals(QT_MAJOR_VERSION, 4) {
+    CONFIG += mobility mlocale mkcal
+    MOBILITY = contacts
+    PKGCONFIG += mlite
+}
+equals(QT_MAJOR_VERSION, 5) {
+    PKGCONFIG += Qt5Contacts
+    PKGCONFIG += mlite5 mlocale5 libmkcal-qt5 libkcalcoren-qt5
+    DEFINES *= USING_QTPIM
+}
 
 CONFIG(coverage):{
 QMAKE_CXXFLAGS +=  -ftest-coverage -fprofile-arcs

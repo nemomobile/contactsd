@@ -24,7 +24,11 @@
 #include "base-plugin.h"
 #include "debug.h"
 
+#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
+#include <QStandardPaths>
+#else
 #include <QDesktopServices>
+#endif
 
 namespace Contactsd
 {
@@ -37,7 +41,11 @@ const QString BasePlugin::metaDataKeyComment = QString::fromLatin1("comment");
 QDir
 BasePlugin::cacheDir()
 {
+#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
+    QString cacheRoot = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+#else
     QString cacheRoot = QDesktopServices::storageLocation(QDesktopServices::CacheLocation);
+#endif
 
     if (cacheRoot.isEmpty()) {
         cacheRoot = QDir::home().filePath(QLatin1String(".cache"));
