@@ -53,7 +53,8 @@ static void customMessageHandler(QtMsgType type, const char *msg)
     }
 
 #if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
-    const char *msg = msgStr.toLocal8Bit().constData();
+    const QByteArray &msgData(msgStr.toLocal8Bit());
+    const char *msg = msgData.constData();
 #endif
 
     // Actually qInstallMsgHandler() returned null in main() when
