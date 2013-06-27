@@ -15,8 +15,8 @@ BuildRequires: pkgconfig(mlocale5)
 BuildRequires: pkgconfig(libmkcal-qt5)
 BuildRequires: pkgconfig(libkcalcoren-qt5)
 BuildRequires: pkgconfig(telepathy-glib)
-Obsoletes: contactsd
-Provides: contactsd
+Obsoletes: contactsd < %{version}
+Provides: contactsd = %{version}
 
 %description
 contactsd is a service for collecting and observing changes in roster list
@@ -73,4 +73,3 @@ make %{?_smp_mflags}
 
 %install
 make INSTALL_ROOT=%{buildroot} install
-
