@@ -143,10 +143,7 @@ TOP_BUILDDIR = \$\$quote($TOP_BUILDDIR)
 CONFIG += \$\$quote($ENABLE_COVERAGE)
 EOF
 
-case $QT_VERSION in
-    "5."*) infiles="contactsd-qt5-1.0.pc tests/mktests.sh" ;;
-    *) infiles="contactsd-1.0.pc tests/mktests.sh" ;;
-esac
+infiles="contactsd-1.0.pc tests/mktests.sh"
 
 for infile in $infiles; do
     echo "Generating $infile"

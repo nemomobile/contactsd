@@ -4,8 +4,7 @@ QT -= gui
 
 SUBDIRS += src plugins tests
 
-equals(QT_MAJOR_VERSION, 4): PACKAGENAME=contactsd
-equals(QT_MAJOR_VERSION, 5): PACKAGENAME=contactsd-qt5
+PACKAGENAME=contactsd
 
 PKGCONFIG_FILE=$${PACKAGENAME}-1.0.pc
 

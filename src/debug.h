@@ -118,12 +118,6 @@ inline Debug warning()
     return enabledWarning();
 }
 
-#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
-// Conflicts with the definitions of qDebug/qWarning in qt5
-#define debug() ((enabledDebug().nospace() << __func__ << ", line " << __LINE__ << ":").space())
-#define warning() ((enabledWarning().nospace() << __func__ << ", line " << __LINE__ << ":").space())
-#endif
-
 #else /* #ifdef ENABLE_DEBUG */
 
 struct NoDebug

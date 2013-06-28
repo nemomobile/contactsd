@@ -39,41 +39,30 @@ const int IMPORT_TIMEOUT = 5 * 60 * 1000;
 // alive check timeout is 30 seconds
 const int ALIVE_TIMEOUT = 30 * 1000;
 
-#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
-#define INSTALL_HANDLER(x) qInstallMessageHandler(x)
-#else
-#define INSTALL_HANDLER(x) qInstallMsgHandler(x)
-#endif
-
 class MsgHandlerGuard
 {
 private:
-#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
     const QtMessageHandler m_msgHandler;
-#else
-    const QtMsgHandler m_msgHandler;
-#endif
     const QString m_context;
 
 public:
     MsgHandlerGuard(const QString &context)
-        : m_msgHandler(INSTALL_HANDLER(0))
+        : m_msgHandler(qInstallMessageHandler(0))
         , m_context(context)
     {
         // we had to cheat a bit to lookup the handler - there is no decicated mechanism
-        INSTALL_HANDLER(m_msgHandler);
+        qInstallMessageHandler(m_msgHandler);
     }
 
     ~MsgHandlerGuard()
     {
-        if (INSTALL_HANDLER(m_msgHandler) != m_msgHandler) {
+        if (qInstallMessageHandler(m_msgHandler) != m_msgHandler) {
             warning() << "Message handler got modified by"
                       << m_context << " - don't do that!";
         }
     }
 };
 
-#undef INSTALL_HANDLER
 
 ContactsdPluginLoader::ContactsdPluginLoader()
     : mImportTimer(0)

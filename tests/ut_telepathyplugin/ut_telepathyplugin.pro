@@ -40,16 +40,9 @@ PKGCONFIG += telepathy-glib
 DEFINES += QT_NO_KEYWORDS
 DEFINES += ENABLE_DEBUG
 
-equals(QT_MAJOR_VERSION, 4) {
-    CONFIG += mobility
-    MOBILITY += contacts
-    PKGCONFIG += TelepathyQt4
-}
-equals(QT_MAJOR_VERSION, 5) {
-    PKGCONFIG += Qt5Contacts
-    PKGCONFIG += TelepathyQt5
-    DEFINES *= USING_QTPIM
-}
+PKGCONFIG += Qt5Contacts
+PKGCONFIG += TelepathyQt5
+DEFINES *= USING_QTPIM
 
 system(cp $$PWD/../../plugins/telepathy/com.nokia.contacts.buddymanagement.xml .)
 system(qdbusxml2cpp -c BuddyManagementInterface -p buddymanagementinterface.h:buddymanagementinterface.cpp com.nokia.contacts.buddymanagement.xml)

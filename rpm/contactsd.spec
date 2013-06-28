@@ -6,13 +6,17 @@ Group: System/Libraries
 URL: https://github.com/nemomobile/contactsd
 License: LGPLv2
 Source0: %{name}-%{version}.tar.bz2
-BuildRequires: pkgconfig(QtCore)
-BuildRequires: pkgconfig(TelepathyQt4)
-BuildRequires: pkgconfig(QtContacts)
+BuildRequires: pkgconfig(Qt5Core)
+BuildRequires: pkgconfig(Qt5DBus)
+BuildRequires: pkgconfig(Qt5Network)
+BuildRequires: pkgconfig(Qt5Test)
+BuildRequires: pkgconfig(TelepathyQt5)
+BuildRequires: pkgconfig(Qt5Contacts)
 # mlite required only for tests
-BuildRequires: pkgconfig(mlite)
-BuildRequires: pkgconfig(mlocale)
-BuildRequires: pkgconfig(libmkcal)
+BuildRequires: pkgconfig(mlite5)
+BuildRequires: pkgconfig(mlocale5)
+BuildRequires: pkgconfig(libmkcal-qt5)
+BuildRequires: pkgconfig(libkcalcoren-qt5)
 BuildRequires: pkgconfig(telepathy-glib)
 
 %description
@@ -61,8 +65,9 @@ Requires: %{name} = %{version}-%{release}
 %setup -q -n %{name}-%{version}
 
 %build
+export QT_SELECT=5
 ./configure --bindir %{_bindir} --libdir %{_libdir} --includedir %{_includedir}
-%qmake
+%qmake5
 make %{?_smp_mflags}
 
 

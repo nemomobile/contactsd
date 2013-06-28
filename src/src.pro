@@ -21,8 +21,7 @@
 # conditions contained in a signed written agreement between you and Nokia.
 
 TEMPLATE = app
-equals(QT_MAJOR_VERSION, 4): TARGET = contactsd
-equals(QT_MAJOR_VERSION, 5): TARGET = contactsd-qt5
+TARGET = contactsd
 
 VERSIONED_TARGET = $$TARGET-1.0
 

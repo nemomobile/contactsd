@@ -22,4 +22,4 @@
 
 INCLUDEPATH += $$PWD
 
-include(packagename.pri)
+PACKAGENAME = contactsd

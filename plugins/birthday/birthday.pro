@@ -23,24 +23,12 @@
 TEMPLATE = lib
 QT -= gui
 
-# Hack: mkcal adds /usr/include/meegotouch to include path, and alphabetic CONFIG
-# always puts that before mlocale, resulting in link errors. Force mlocale to be
-# first.
-equals(QT_MAJOR_VERSION, 4): INCLUDEPATH += /usr/include/mlocale
-equals(QT_MAJOR_VERSION, 5): INCLUDEPATH += /usr/include/mlocale5
-
 CONFIG += plugin
 
-equals(QT_MAJOR_VERSION, 4) {
-    CONFIG += mlocale mkcal mobility
-    MOBILITY += contacts
-}
-equals(QT_MAJOR_VERSION, 5) {
-    CONFIG += link_pkgconfig
-    PKGCONFIG += mlocale5 libmkcal-qt5 libkcalcoren-qt5
-    PKGCONFIG += Qt5Contacts
-    DEFINES *= USING_QTPIM
-}
+CONFIG += link_pkgconfig
+PKGCONFIG += mlocale5 libmkcal-qt5 libkcalcoren-qt5
+PKGCONFIG += Qt5Contacts
+DEFINES *= USING_QTPIM
 
 CONFIG(coverage):{
 QMAKE_CXXFLAGS += -c -g  --coverage -ftest-coverage -fprofile-arcs
@@ -61,7 +49,6 @@ SOURCES  = cdbirthdaycalendar.cpp \
     cdbirthdayplugin.cpp
 
 TARGET = birthdayplugin
-equals(QT_MAJOR_VERSION, 4): target.path = $$LIBDIR/contactsd-1.0/plugins
-equals(QT_MAJOR_VERSION, 5): target.path = $$LIBDIR/contactsd-qt5-1.0/plugins
+target.path = $$LIBDIR/contactsd-1.0/plugins
 
 INSTALLS += target

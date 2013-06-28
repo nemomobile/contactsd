@@ -20,7 +20,7 @@
 # Alternatively, this file may be used in accordance with the terms and
 # conditions contained in a signed written agreement between you and Nokia.
 
-include(common/packagename.pri)
+PACKAGENAME = contactsd
 
 TEMPLATE = subdirs
 CONFIG += ordered

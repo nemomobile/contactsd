@@ -1,9 +1,0 @@
-[Unit]
-Description=Contacts daemon
-After=xorg.target
-Requires=dbus.socket xorg.target
-
-[Service]
-ExecStart=/usr/bin/contactsd-qt5
-
-
