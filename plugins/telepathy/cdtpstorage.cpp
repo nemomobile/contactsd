@@ -361,40 +361,6 @@ ContactIdType selfContactLocalId()
         if (!mgr->saveContact(&tpSelf)) {
             warning() << "Unable to save empty contact as self contact - error:" << mgr->error();
         } else {
-            // Find the aggregate contact created by saving our self contact
-#ifdef USING_QTPIM
-            relationshipFilter.setRelationshipType(QContactRelationship::Aggregates());
-            relatedContact.setId(tpSelf.id());
-            relationshipFilter.setRelatedContact(relatedContact);
-#else
-            relationshipFilter.setRelationshipType(QContactRelationship::Aggregates);
-            relationshipFilter.setRelatedContactId(tpSelf.id());
-#endif
-            relationshipFilter.setRelatedContactRole(QContactRelationship::Second);
-
-            foreach (const QContact &aggregator, mgr->contacts(relationshipFilter)) {
-                // Remove the relationship between these contacts
-                QContactRelationship relationship;
-#ifdef USING_QTPIM
-                relationship.setRelationshipType(QContactRelationship::Aggregates());
-                relationship.setFirst(aggregator);
-                relationship.setSecond(tpSelf);
-#else
-                relationship.setRelationshipType(QContactRelationship::Aggregates);
-                relationship.setFirst(aggregator.id());
-                relationship.setSecond(tpSelf.id());
-#endif
-
-                if (!mgr->removeRelationship(relationship)) {
-                    warning() << "Unable to remove relationship for self contact - error:" << mgr->error();
-                } else {
-                    // Remove this contact
-                    if (!mgr->removeContact(apiId(aggregator))) {
-                        warning() << "Unable to remove unwanted aggregate of self contact - error:" << mgr->error();
-                    }
-                }
-            }
-
             // Now connect our contact to the real self contact
             QContactRelationship relationship;
 #ifdef USING_QTPIM
@@ -410,9 +376,42 @@ ContactIdType selfContactLocalId()
 
             if (!mgr->saveRelationship(&relationship)) {
                 warning() << "Unable to save relationship for self contact - error:" << mgr->error();
-            } else {
-                return apiId(tpSelf);
+                qFatal("Cannot proceed with invalid self contact!");
             }
+
+            // Find the aggregate contact created by saving our self contact
+#ifdef USING_QTPIM
+            relationshipFilter.setRelationshipType(QContactRelationship::Aggregates());
+            relatedContact.setId(tpSelf.id());
+            relationshipFilter.setRelatedContact(relatedContact);
+#else
+            relationshipFilter.setRelationshipType(QContactRelationship::Aggregates);
+            relationshipFilter.setRelatedContactId(tpSelf.id());
+#endif
+            relationshipFilter.setRelatedContactRole(QContactRelationship::Second);
+
+            foreach (const QContact &aggregator, mgr->contacts(relationshipFilter)) {
+                if (aggregator.id() == tpSelf.id())
+                    continue;
+
+                // Remove the relationship between these contacts (which removes the childless aggregate)
+                QContactRelationship relationship;
+#ifdef USING_QTPIM
+                relationship.setRelationshipType(QContactRelationship::Aggregates());
+                relationship.setFirst(aggregator);
+                relationship.setSecond(tpSelf);
+#else
+                relationship.setRelationshipType(QContactRelationship::Aggregates);
+                relationship.setFirst(aggregator.id());
+                relationship.setSecond(tpSelf.id());
+#endif
+
+                if (!mgr->removeRelationship(relationship)) {
+                    warning() << "Unable to remove relationship for self contact - error:" << mgr->error();
+                }
+            }
+
+            return apiId(tpSelf);
         }
     }
 
