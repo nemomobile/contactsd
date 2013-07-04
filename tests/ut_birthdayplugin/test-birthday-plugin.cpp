@@ -94,7 +94,7 @@ void TestBirthdayPlugin::testAddAndRemoveBirthday()
     QContact contact;
     QVERIFY(contact.saveDetail(&contactName));
     QVERIFY(contact.saveDetail(&contactBirthday));
-    QVERIFY2(mManager->saveContact(&contact), "Error saving contact to tracker");
+    QVERIFY2(saveContact(contact), "Error saving contact to tracker");
 
     // Wait until calendar event gets to calendar.
     loopWait(calendarTimeout);
@@ -140,7 +140,7 @@ void TestBirthdayPlugin::testChangeBirthday()
     QContact contact;
     QVERIFY(contact.saveDetail(&contactName));
     QVERIFY(contact.saveDetail(&contactBirthday));
-    QVERIFY2(mManager->saveContact(&contact), "Error saving contact to tracker");
+    QVERIFY2(saveContact(contact), "Error saving contact to tracker");
 
     // Wait until calendar event gets to calendar.
     loopWait(calendarTimeout);
@@ -161,7 +161,7 @@ void TestBirthdayPlugin::testChangeBirthday()
     // Change the contact and see if the birthday is updated.
     contactBirthday.setDateTime(contactBirthDate.addDays(-3));
     QVERIFY(contact.saveDetail(&contactBirthday));
-    QVERIFY2(mManager->saveContact(&contact), "Unable to update test contact in tracker");
+    QVERIFY2(saveContact(contact), "Unable to update test contact in tracker");
 
     // Wait until calendar event gets to calendar.
     loopWait(calendarTimeout);
@@ -188,7 +188,7 @@ void TestBirthdayPlugin::testChangeName()
     QContact contact;
     QVERIFY(contact.saveDetail(&contactName));
     QVERIFY(contact.saveDetail(&contactBirthday));
-    QVERIFY2(mManager->saveContact(&contact), "Error saving contact to tracker");
+    QVERIFY2(saveContact(contact), "Error saving contact to tracker");
 
     // Wait until calendar event gets to calendar.
     loopWait(calendarTimeout);
@@ -212,7 +212,7 @@ void TestBirthdayPlugin::testChangeName()
     QVERIFY(contact.saveDetail(&contactName));
     // TODO: Should it be necessary to refetch the contact to get the synthesised displayLabel?
     contact = mManager->contact(apiId(contact));
-    QVERIFY2(mManager->saveContact(&contact), "Unable to update test contact in tracker");
+    QVERIFY2(saveContact(contact), "Unable to update test contact in tracker");
 
     // Wait until calendar event gets to calendar.
     loopWait(calendarTimeout);
@@ -228,6 +228,9 @@ void TestBirthdayPlugin::testChangeName()
 
 void TestBirthdayPlugin::testLocaleChange()
 {
+    // Is this the infrastructure for this tets still available?
+    QSKIP("MeegoTouch language setting change is not reflected in KCalCore...");
+
     MGConfItem store(QLatin1String("/meegotouch/i18n/language"));
     store.set(QLatin1String("en"));
 

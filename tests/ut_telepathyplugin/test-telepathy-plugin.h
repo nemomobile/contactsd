@@ -76,7 +76,7 @@ protected Q_SLOTS:
     void contactsRemoved(const QList<QContactLocalId>& contactIds);
 #endif
     void onContactsFetched();
-    void onRequestFinished();
+    void requestStateChanged(QContactAbstractRequest::State newState);
 
 private Q_SLOTS:
     void initTestCase();

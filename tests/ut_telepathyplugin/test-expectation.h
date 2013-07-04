@@ -105,6 +105,7 @@ class TestExpectationInit : public TestExpectation
 
 protected:
     void verify(Event event, const QList<QContact> &contacts);
+    void verify(Event event, const QList<ContactIdType> &contactIds, QContactManager::Error error);
 };
 typedef Tp::SharedPtr<TestExpectationInit> TestExpectationInitPtr;
 
@@ -143,6 +144,8 @@ public:
     void setEvent(const Event &event) { mEvent = event; };
     void resetVerifyFlags() { mFlags = 0; };
 
+    void skipUnlessGeneratorIs(const QString &generator) { mSyncTarget = generator; };
+
     void verifyAlias(const QString &alias) { mAlias = alias; mFlags |= VerifyAlias; };
     void verifyPresence(TpTestsContactsConnectionPresenceStatusIndex presence) { mPresence = presence; mFlags |= VerifyPresence; };
     void verifyAvatar(const QByteArray &avatarData) { mAvatarData = avatarData; mFlags |= VerifyAvatar; };
@@ -156,7 +159,13 @@ public:
 #endif
         mFlags |= VerifyContactId;
     };
-    void verifyGenerator(const QString &generator) { mGenerator = generator; mFlags |= VerifyGenerator; };
+    void verifyGenerator(const QString &generator) {
+        mGenerator = generator;
+        mFlags |= VerifyGenerator;
+#ifdef USING_QTPIM
+        skipUnlessGeneratorIs(mGenerator);
+#endif
+    }
 
     void verify(const QContact &contact);
 
@@ -191,6 +200,7 @@ private:
     GPtrArray *mContactInfo;
     ContactIdType mContactId;
     QString mGenerator;
+    QString mSyncTarget;
 
     QContact mContact;
 };
