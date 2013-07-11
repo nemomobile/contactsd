@@ -25,9 +25,9 @@ PACKAGENAME = contactsd
 TEMPLATE = subdirs
 CONFIG += ordered
 
-SUBDIRS += libtelepathy ut_birthdayplugin ut_telepathyplugin
+SUBDIRS += libtelepathy ut_birthdayplugin ut_telepathyplugin ut_simplugin
 
-UNIT_TESTS += ut_birthdayplugin ut_telepathyplugin
+UNIT_TESTS += ut_birthdayplugin ut_telepathyplugin ut_simplugin
 
 testxml.target = tests.xml
 testxml.commands = sh $$PWD/mktests.sh $$UNIT_TESTS >$@ || rm -f $@

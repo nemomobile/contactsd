@@ -40,7 +40,7 @@ do
     if [ -f $suite/$suite-wrapper.sh ]; then
         command="/opt/tests/contactsd/$suite/$suite-wrapper.sh"
     else
-        command="@BINDIR@/$suite/$suite"
+        command="/opt/tests/contactsd/$suite/$suite"
     fi
 
 cat <<EOF

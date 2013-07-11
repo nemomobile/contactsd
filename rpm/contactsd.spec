@@ -20,6 +20,7 @@ BuildRequires: pkgconfig(mlocale5)
 BuildRequires: pkgconfig(libmkcal-qt5)
 BuildRequires: pkgconfig(libkcalcoren-qt5)
 BuildRequires: pkgconfig(telepathy-glib)
+BuildRequires: pkgconfig(qofono-qt5)
 
 %description
 contactsd is a service for collecting and observing changes in roster list

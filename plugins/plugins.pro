@@ -22,4 +22,4 @@
 
 TEMPLATE = subdirs
 
-SUBDIRS += telepathy birthday
+SUBDIRS += telepathy birthday sim
