@@ -14,6 +14,7 @@ BuildRequires: pkgconfig(Qt5Network)
 BuildRequires: pkgconfig(Qt5Test)
 BuildRequires: pkgconfig(TelepathyQt5)
 BuildRequires: pkgconfig(Qt5Contacts)
+BuildRequires: pkgconfig(Qt5Versit)
 # mlite required only for tests
 BuildRequires: pkgconfig(mlite5)
 BuildRequires: pkgconfig(mlocale5)
