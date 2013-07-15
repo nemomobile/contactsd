@@ -26,6 +26,9 @@
 #include <TelepathyQt/ContactManager>
 #include <TelepathyQt/ConnectionCapabilities>
 
+#include <qtcontacts-extensions.h>
+#include <QContactOriginMetadata>
+
 #include <QContact>
 #include <QContactManager>
 #include <QContactDetail>
@@ -167,91 +170,10 @@ QString stringValue(const QContactDetail &detail, F field)
 #endif
 }
 
-class Q_CONTACTS_EXPORT QContactTpMetadata : public QContactDetail
-{
-public:
-#ifdef USING_QTPIM
-    Q_DECLARE_CUSTOM_CONTACT_DETAIL(QContactTpMetadata);
-
-    enum {
-        FieldContactId = 0,
-        FieldAccountId = 1,
-        FieldAccountEnabled = 2
-    };
-#else
-    Q_DECLARE_CUSTOM_CONTACT_DETAIL(QContactTpMetadata, "TpMetadata")
-    Q_DECLARE_LATIN1_CONSTANT(FieldContactId, "ContactId");
-    Q_DECLARE_LATIN1_CONSTANT(FieldAccountId, "AccountId");
-    Q_DECLARE_LATIN1_CONSTANT(FieldAccountEnabled, "AccountEnabled");
-#endif
-
-    void setContactId(const QString &s) { setValue(FieldContactId, s); }
-    QString contactId() const { return stringValue(*this, FieldContactId); }
-
-    void setAccountId(const QString &s) { setValue(FieldAccountId, s); }
-    QString accountId() const { return stringValue(*this, FieldAccountId); }
-
-    void setAccountEnabled(bool b) { setValue(FieldAccountEnabled, asString(b)); }
-    bool accountEnabled() const { return (stringValue(*this, FieldAccountEnabled) == asString(true)); }
-
-    static QContactDetailFilter matchContactId(const QString &s)
-    {
-        QContactDetailFilter filter;
-#ifdef USING_QTPIM
-        filter.setDetailType(QContactTpMetadata::Type, FieldContactId);
-#else
-        filter.setDetailDefinitionName(QContactTpMetadata::DefinitionName, FieldContactId);
-#endif
-        filter.setValue(s);
-        filter.setMatchFlags(QContactFilter::MatchExactly);
-        return filter;
-    }
-
-    static QContactDetailFilter matchAccountId(const QString &s)
-    {
-        QContactDetailFilter filter;
-#ifdef USING_QTPIM
-        filter.setDetailType(QContactTpMetadata::Type, FieldAccountId);
-#else
-        filter.setDetailDefinitionName(QContactTpMetadata::DefinitionName, FieldAccountId);
-#endif
-        filter.setValue(s);
-        filter.setMatchFlags(QContactFilter::MatchExactly);
-        return filter;
-    }
-};
-
-#ifdef USING_QTPIM
-const QContactDetail::DetailType QContactTpMetadata::Type(static_cast<QContactDetail::DetailType>(QContactDetail::TypeVersion + 1));
-#else
-Q_IMPLEMENT_CUSTOM_CONTACT_DETAIL(QContactTpMetadata, "TpMetadata");
-Q_DEFINE_LATIN1_CONSTANT(QContactTpMetadata::FieldContactId, "ContactId");
-Q_DEFINE_LATIN1_CONSTANT(QContactTpMetadata::FieldAccountId, "AccountId");
-Q_DEFINE_LATIN1_CONSTANT(QContactTpMetadata::FieldAccountEnabled, "AccountEnabled");
-#endif
-
 namespace {
 
 const int UPDATE_TIMEOUT = 150; // ms
 const int UPDATE_THRESHOLD = 50; // contacts
-
-#ifdef USING_QTPIM
-const int QContactDetail__ContextDefault = (QContactDetail::ContextOther+1);
-const int QContactDetail__ContextLarge = (QContactDetail::ContextOther+2);
-
-const int QContactName__FieldCustomLabel = (QContactName::FieldSuffix+1);
-
-const int QContactOnlineAccount__FieldAccountPath = (QContactOnlineAccount::FieldSubTypes+1);
-const int QContactOnlineAccount__FieldAccountIconPath = (QContactOnlineAccount::FieldSubTypes+2);
-const int QContactOnlineAccount__FieldEnabled = (QContactOnlineAccount::FieldSubTypes+3);
-#else
-const QLatin1String QContactDetail__ContextDefault("Default");
-const QLatin1String QContactDetail__ContextLarge("Large");
-
-const QLatin1String QContactOnlineAccount__FieldAccountPath("AccountPath");
-const QLatin1String QContactOnlineAccount__FieldAccountIconPath("AccountIconPath");
-const QLatin1String QContactOnlineAccount__FieldEnabled("Enabled");
-#endif
 
 QContactManager *manager()
 {
@@ -589,7 +511,7 @@ void updateContacts(const QString &location, QList<QContact> *saveList, QList<Co
 QList<ContactIdType> findContactIdsForAccount(const QString &accountPath)
 {
     QContactIntersectionFilter filter;
-    filter << QContactTpMetadata::matchAccountId(accountPath);
+    filter << QContactOriginMetadata::matchGroupId(accountPath);
     filter << matchTelepathyFilter();
     return manager()->contactIds(filter);
 }
@@ -608,13 +530,13 @@ QHash<QString, QContact> findExistingContacts(const QStringList &contactAddresse
 
         // First fetch all telepathy contacts, ID data only
 #ifdef USING_QTPIM
-        hint.setDetailTypesHint(DetailList() << QContactTpMetadata::Type);
+        hint.setDetailTypesHint(DetailList() << QContactOriginMetadata::Type);
 #else
-        hint.setDetailDefinitionsHint(DetailList() << QContactTpMetadata::DefinitionName);
+        hint.setDetailDefinitionsHint(DetailList() << QContactOriginMetadata::DefinitionName);
 #endif
 
         foreach (const QContact &contact, manager()->contacts(matchTelepathyFilter(), QList<QContactSortOrder>(), hint)) {
-            const QString &address = stringValue(contact.detail<QContactTpMetadata>(), QContactTpMetadata::FieldContactId);
+            const QString &address = stringValue(contact.detail<QContactOriginMetadata>(), QContactOriginMetadata::FieldId);
             if (addressSet.contains(address)) {
                 ids.append(apiId(contact));
             }
@@ -628,7 +550,7 @@ QHash<QString, QContact> findExistingContacts(const QStringList &contactAddresse
 
         // Now fetch the details of the required contacts by ID
         foreach (const QContact &contact, manager()->contacts(ids, hint)) {
-            rv.insert(stringValue(contact.detail<QContactTpMetadata>(), QContactTpMetadata::FieldContactId), contact);
+            rv.insert(stringValue(contact.detail<QContactOriginMetadata>(), QContactOriginMetadata::FieldId), contact);
         }
     } else {
         // Just query the ones we need
@@ -637,12 +559,12 @@ QHash<QString, QContact> findExistingContacts(const QStringList &contactAddresse
 
         QContactUnionFilter addressFilter;
         foreach (const QString &address, contactAddresses) {
-            addressFilter << QContactTpMetadata::matchContactId(address);
+            addressFilter << QContactOriginMetadata::matchId(address);
         }
         filter << addressFilter;
 
         foreach (const QContact &contact, manager()->contacts(filter, QList<QContactSortOrder>(), hint)) {
-            rv.insert(stringValue(contact.detail<QContactTpMetadata>(), QContactTpMetadata::FieldContactId), contact);
+            rv.insert(stringValue(contact.detail<QContactOriginMetadata>(), QContactOriginMetadata::FieldId), contact);
         }
     }
 
@@ -654,7 +576,7 @@ QContact findExistingContact(const QString &contactAddress)
     static QContactFetchHint hint(contactFetchHint());
 
     QContactIntersectionFilter filter;
-    filter << QContactTpMetadata::matchContactId(contactAddress);
+    filter << QContactOriginMetadata::matchId(contactAddress);
     filter << matchTelepathyFilter();
 
     foreach (const QContact &contact, manager()->contacts(filter, QList<QContactSortOrder>(), hint)) {
@@ -1604,10 +1526,10 @@ bool CDTpStorage::initializeNewContact(QContact &newContact, CDTpAccountPtr acco
     }
 
     // Create a metadata field to link the contact with the telepathy data
-    QContactTpMetadata metadata;
-    metadata.setContactId(contactAddress);
-    metadata.setAccountId(imAccount(account));
-    metadata.setAccountEnabled(true);
+    QContactOriginMetadata metadata;
+    metadata.setId(contactAddress);
+    metadata.setGroupId(imAccount(account));
+    metadata.setEnabled(true);
     if (!storeContactDetail(newContact, metadata, SRC_LOC)) {
         warning() << SRC_LOC << "Unable to add metadata to contact:" << contactAddress;
         return false;
@@ -1785,8 +1707,8 @@ void CDTpStorage::updateAccountChanges(QContactOnlineAccount &qcoa, CDTpAccountP
 
             if (!account->isEnabled()) {
                 // Mark the contact as un-enabled also
-                QContactTpMetadata metadata = existing.detail<QContactTpMetadata>();
-                metadata.setAccountEnabled(false);
+                QContactOriginMetadata metadata = existing.detail<QContactOriginMetadata>();
+                metadata.setEnabled(false);
 
                 if (!storeContactDetail(existing, metadata, SRC_LOC)) {
                     warning() << SRC_LOC << "Unable to un-enable contact for:" << contactId;
@@ -2073,8 +1995,8 @@ void CDTpStorage::removeAccountContacts(CDTpAccountPtr accountWrapper, const QSt
 
     // Find any contacts matching the supplied ID list
     foreach (const QContact &existing, manager()->contacts(findContactIdsForAccount(accountPath))) {
-        QContactTpMetadata metadata = existing.detail<QContactTpMetadata>();
-        if (imAddressList.contains(metadata.contactId())) {
+        QContactOriginMetadata metadata = existing.detail<QContactOriginMetadata>();
+        if (imAddressList.contains(metadata.id())) {
             removeIds.append(apiId(existing));
         }
     }
@@ -2150,3 +2072,5 @@ void CDTpStorage::cancelQueuedUpdates(const QList<CDTpContactPtr> &contacts)
     }
 }
 
+// Instantiate the QContactOriginMetadata functions
+#include <qcontactoriginmetadata_impl.h>
