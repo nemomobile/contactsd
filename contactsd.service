@@ -5,6 +5,7 @@ Requires=dbus.socket
 
 [Service]
 ExecStart=/usr/bin/contactsd
+Restart=always
 
 [Install]
 WantedBy=user-session.target
