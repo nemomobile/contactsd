@@ -269,7 +269,7 @@ CDBirthdayController::processFetchRequest(QContactFetchRequest *const fetchReque
 }
 
 #ifdef USING_QTPIM
-const QContactId &apiId(const QContact &contact) { return contact.id(); }
+QContactId apiId(const QContact &contact) { return contact.id(); }
 #else
 QContactLocalId apiId(const QContact &contact) { return contact.localId(); }
 #endif
