@@ -808,7 +808,7 @@ QString saveAccountAvatar(CDTpAccountPtr accountWrapper)
         return QString();
     }
 
-    // TODO: create dir if nonexistent
+    // TODO: Use standard data location, and create dir if nonexistent
     static const QString tmpl = QString::fromLatin1("%1/.contacts/avatars/%2");
     QString fileName = tmpl.arg(QDir::homePath())
         .arg(QLatin1String(QCryptographicHash::hash(avatar.avatarData, QCryptographicHash::Sha1).toHex()));
@@ -922,16 +922,19 @@ CDTpContact::Changes updateAccountDetails(QContact &self, QContactOnlineAccount 
         selfChanges |= CDTpContact::Avatar;
     }
 
+    if (selfChanges & CDTpContact::Presence) {
+        if (!storeContactDetail(self, presence, SRC_LOC)) {
+            warning() << SRC_LOC << "Unable to save presence for self account:" << accountPath;
+        }
+
+        // Presence changes also imply potential capabilities changes
+        selfChanges |= CDTpContact::Capabilities;
+    }
+
     if (selfChanges & CDTpContact::Capabilities) {
         // The account has changed
         if (!storeContactDetail(self, qcoa, SRC_LOC)) {
             warning() << SRC_LOC << "Unable to save details for self account:" << accountPath;
-        }
-    }
-
-    if (selfChanges & CDTpContact::Presence) {
-        if (!storeContactDetail(self, presence, SRC_LOC)) {
-            warning() << SRC_LOC << "Unable to save presence for self account:" << accountPath;
         }
     }
 
@@ -1604,14 +1607,8 @@ void CDTpStorage::updateContactChanges(CDTpContactPtr contactWrapper, CDTpContac
     }
 }
 
-void CDTpStorage::updateAccountChanges(QContactOnlineAccount &qcoa, CDTpAccountPtr accountWrapper, CDTpAccount::Changes changes)
+void CDTpStorage::updateAccountChanges(QContact &self, QContactOnlineAccount &qcoa, CDTpAccountPtr accountWrapper, CDTpAccount::Changes changes)
 {
-    QContact self(selfContact());
-    if (self.isEmpty()) {
-        warning() << SRC_LOC << "Unable to retrieve self contact - error:" << manager()->error();
-        return;
-    }
-
     Tp::AccountPtr account = accountWrapper->account();
 
     const QString accountPath(imAccount(account));
@@ -1744,7 +1741,7 @@ void CDTpStorage::syncAccounts(const QList<CDTpAccountPtr> &accounts)
         int index = accountPaths.indexOf(existingPath);
         if (index != -1) {
             existingIndices.insert(index);
-            updateAccountChanges(existingAccount, accounts.at(index), CDTpAccount::All);
+            updateAccountChanges(self, existingAccount, accounts.at(index), CDTpAccount::All);
         } else {
             debug() << SRC_LOC << "Remove obsolete account:" << existingPath;
 
@@ -1752,9 +1749,6 @@ void CDTpStorage::syncAccounts(const QList<CDTpAccountPtr> &accounts)
             removalPaths.insert(existingPath);
         }
     }
-
-    // Reload the contact in case we updated it
-    self = selfContact();
 
     // Remove invalid accounts
     foreach (QContactOnlineAccount existingAccount, self.details<QContactOnlineAccount>()) {
@@ -1841,7 +1835,7 @@ void CDTpStorage::updateAccount(CDTpAccountPtr accountWrapper, CDTpAccount::Chan
     foreach (QContactOnlineAccount existingAccount, self.details<QContactOnlineAccount>()) {
         const QString existingPath(stringValue(existingAccount, QContactOnlineAccount__FieldAccountPath));
         if (existingPath == accountPath) {
-            updateAccountChanges(existingAccount, accountWrapper, changes);
+            updateAccountChanges(self, existingAccount, accountWrapper, changes);
             return;
         }
     }
@@ -1892,7 +1886,7 @@ void CDTpStorage::syncAccountContacts(CDTpAccountPtr accountWrapper)
     foreach (QContactOnlineAccount existingAccount, self.details<QContactOnlineAccount>()) {
         const QString existingPath(stringValue(existingAccount, QContactOnlineAccount__FieldAccountPath));
         if (existingPath == accountPath) {
-            updateAccountChanges(existingAccount, accountWrapper, CDTpAccount::Enabled);
+            updateAccountChanges(self, existingAccount, accountWrapper, CDTpAccount::Enabled);
             return;
         }
     }

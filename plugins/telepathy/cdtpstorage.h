@@ -77,7 +77,7 @@ private:
     void addNewAccount(QContact &self, CDTpAccountPtr accountWrapper);
     void removeExistingAccount(QContact &self, QContactOnlineAccount &existing);
 
-    void updateAccountChanges(QContactOnlineAccount &qcoa, CDTpAccountPtr accountWrapper, CDTpAccount::Changes changes);
+    void updateAccountChanges(QContact &self, QContactOnlineAccount &qcoa, CDTpAccountPtr accountWrapper, CDTpAccount::Changes changes);
 
     bool initializeNewContact(QContact &newContact, CDTpAccountPtr accountWrapper, const QString &contactId);
 #ifdef USING_QTPIM
