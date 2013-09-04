@@ -410,6 +410,7 @@ DetailList contactChangesList(CDTpContact::Changes changes)
     }
     if (changes & CDTpContact::Capabilities) {
         rv.append(detailType<QContactOnlineAccount>());
+        rv.append(detailType<QContactOriginMetadata>());
     }
     if (changes & CDTpContact::Avatar) {
         rv.append(detailType<QContactAvatar>());
@@ -455,9 +456,11 @@ bool storeContact(QContact &contact, const QString &location, CDTpContact::Chang
     return true;
 }
 
-void updateContacts(const QString &location, QList<QContact> *saveList, QList<ContactIdType> *removeList)
+void updateContacts(const QString &location, QList<QContact> *saveList, QList<ContactIdType> *removeList, CDTpContact::Changes changes = CDTpContact::All)
 {
     if (saveList && !saveList->isEmpty()) {
+        const DetailList detailList(contactChangesList(changes));
+
         QElapsedTimer t;
         t.start();
 
@@ -468,8 +471,14 @@ void updateContacts(const QString &location, QList<QContact> *saveList, QList<Co
             storedCount += BATCH_STORE_SIZE;
 
             do {
+                bool success;
                 QMap<int, QContactManager::Error> errorMap;
-                if (manager()->saveContacts(&batch, &errorMap)) {
+                if (changes == CDTpContact::All) {
+                    success = manager()->saveContacts(&batch, &errorMap);
+                } else {
+                    success = manager()->saveContacts(&batch, detailList, &errorMap);
+                }
+                if (success) {
                     // We could copy the updated contacts back into saveList here, but it doesn't seem warranted
                     break;
                 }
@@ -1682,6 +1691,8 @@ void CDTpStorage::updateAccountChanges(QContact &self, QContactOnlineAccount &qc
 
         updateContacts(SRC_LOC, &saveList, &removeList);
     } else {
+        QList<QContact> saveList;
+
         // Set presence to unknown for all contacts of this account
         foreach (const ContactIdType &contactId, findContactIdsForAccount(accountPath)) {
             QContact existing = manager()->contact(contactId);
@@ -1712,8 +1723,10 @@ void CDTpStorage::updateAccountChanges(QContact &self, QContactOnlineAccount &qc
                 }
             }
 
-            storeContact(existing, SRC_LOC, CDTpContact::Presence | CDTpContact::Capabilities);
+            saveList.append(existing);
         }
+
+        updateContacts(SRC_LOC, &saveList, 0, CDTpContact::Presence | CDTpContact::Capabilities);
     }
 }
 
