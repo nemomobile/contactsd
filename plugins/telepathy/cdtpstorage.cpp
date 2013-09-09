@@ -60,6 +60,7 @@
 
 #include "cdtpstorage.h"
 #include "cdtpavatarupdate.h"
+#include "cdtpplugin.h"
 #include "debug.h"
 
 #include <QElapsedTimer>
@@ -817,20 +818,27 @@ QString saveAccountAvatar(CDTpAccountPtr accountWrapper)
         return QString();
     }
 
-    // TODO: Use standard data location, and create dir if nonexistent
-    static const QString tmpl = QString::fromLatin1("%1/.contacts/avatars/%2");
-    QString fileName = tmpl.arg(QDir::homePath())
-        .arg(QLatin1String(QCryptographicHash::hash(avatar.avatarData, QCryptographicHash::Sha1).toHex()));
+    const QString avatarDirPath(CDTpPlugin::cacheFileName(QString::fromLatin1("avatars/account")));
 
-    QFile avatarFile(fileName);
-    if (!avatarFile.open(QIODevice::WriteOnly)) {
-        warning() << "Unable to save account avatar: error opening avatar file" << fileName << "for writing";
+    QDir storageDir(avatarDirPath);
+    if (!storageDir.exists() && !storageDir.mkpath(QString::fromLatin1("."))) {
+        qWarning() << "Unable to create contacts avatar storage directory:" << storageDir.path();
         return QString();
     }
+
+    QString filename = QString::fromLatin1(QCryptographicHash::hash(avatar.avatarData, QCryptographicHash::Md5).toHex());
+    filename = avatarDirPath + QDir::separator() + filename + QString::fromLatin1(".jpg");
+
+    QFile avatarFile(filename);
+    if (!avatarFile.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        warning() << "Unable to save account avatar: error opening avatar file" << filename << "for writing";
+        return QString();
+    }
+
     avatarFile.write(avatar.avatarData);
     avatarFile.close();
 
-    return fileName;
+    return filename;
 }
 
 void updateFacebookAvatar(QNetworkAccessManager &network, CDTpContactPtr contactWrapper, const QString &facebookId, const QString &avatarType)

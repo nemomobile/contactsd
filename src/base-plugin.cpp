@@ -37,16 +37,11 @@ const QString BasePlugin::metaDataKeyComment = QString::fromLatin1("comment");
 QDir
 BasePlugin::cacheDir()
 {
-    QString cacheRoot = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
-
-    if (cacheRoot.isEmpty()) {
-        cacheRoot = QDir::home().filePath(QLatin1String(".cache"));
-    }
-
-    QDir cacheDir = QDir(cacheRoot).absoluteFilePath(QLatin1String("contactsd"));
+    const QString cacheRoot = QString::fromLatin1(".local/share/system/privileged/Contacts");
+    QDir cacheDir = QDir::home().filePath(cacheRoot);
 
     if (not cacheDir.exists()) {
-        if (not QDir::root().mkpath(cacheDir.path())) {
+        if (not cacheDir.mkpath(QString::fromLatin1("."))) {
             warning() << "Could not create cache dir";
             return QDir();
         }
