@@ -34,6 +34,14 @@ INCLUDEPATH += $$TOP_SOURCEDIR/lib
 LIBS += -export-dynamic
 DEFINES += ENABLE_DEBUG
 
+CONFIG += link_pkgconfig
+packagesExist(qt5-boostable) {
+    DEFINES += HAS_BOOSTER
+    PKGCONFIG += qt5-boostable
+} else {
+    warning("qt5-boostable not available; startup times will be slower")
+}
+
 HEADERS += contactsd.h \
     contactsdpluginloader.h \
     importstate.h \
