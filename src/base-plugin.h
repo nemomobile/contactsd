@@ -35,7 +35,7 @@
 namespace Contactsd
 {
 
-class BasePlugin : public QObject
+class Q_DECL_EXPORT BasePlugin : public QObject
 {
     Q_OBJECT
 

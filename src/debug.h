@@ -27,10 +27,10 @@
 namespace Contactsd
 {
 
-void enableDebug(bool enable);
-void enableWarnings(bool enable);
-bool isDebugEnabled();
-bool isWarningsEnabled();
+Q_DECL_EXPORT void enableDebug(bool enable);
+Q_DECL_EXPORT void enableWarnings(bool enable);
+Q_DECL_EXPORT bool isDebugEnabled();
+Q_DECL_EXPORT bool isWarningsEnabled();
 
 class Debug
 {
@@ -103,8 +103,8 @@ private:
 
 // The telepathy-farsight Qt 4 binding links to these - they're not API outside
 // this source tarball, but they *are* ABI
-Debug enabledDebug();
-Debug enabledWarning();
+Q_DECL_EXPORT Debug enabledDebug();
+Q_DECL_EXPORT Debug enabledWarning();
 
 #ifdef ENABLE_DEBUG
 

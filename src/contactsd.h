@@ -30,7 +30,7 @@
 
 class ContactsdPluginLoader;
 
-class ContactsDaemon : public QObject
+class Q_DECL_EXPORT ContactsDaemon : public QObject
 {
     Q_OBJECT
 
