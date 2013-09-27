@@ -116,14 +116,14 @@ void ContactsdPluginLoader::loadPlugins(const QString &pluginsDir, const QString
         QObject *pluginObject = loader.instance();
 
         if (!pluginObject) {
-            debug() << "Error loading plugin" << absFileName << "- " << loader.errorString();
+            warning() << "Error loading plugin" << absFileName << "- " << loader.errorString();
             continue;
         }
 
         BasePlugin *basePlugin = qobject_cast<BasePlugin *>(pluginObject);
 
         if (!basePlugin) {
-            debug() << "Error loading plugin" << absFileName << "- not a Contactd::BasePlugin";
+            warning() << "Error loading plugin" << absFileName << "- not a Contactd::BasePlugin";
             continue;
         }
 

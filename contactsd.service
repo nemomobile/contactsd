@@ -4,7 +4,7 @@ After=pre-user-session.target booster-qt5.service
 Requires=dbus.socket booster-qt5.service
 
 [Service]
-ExecStart=/usr/bin/invoker -s --type=qt5 /usr/bin/contactsd
+ExecStart=/usr/bin/invoker -s --global-syms --type=qt5 /usr/bin/contactsd
 Restart=always
 
 [Install]
