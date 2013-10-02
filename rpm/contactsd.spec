@@ -34,7 +34,7 @@ information), and store it to QtContacts.
 %files
 %defattr(-,root,root,-)
 %{_libdir}/systemd/user/contactsd.service
-%{_libdir}/systemd/user/user-session.target.wants/contactsd.service
+%{_libdir}/systemd/user/post-user-session.target.wants/contactsd.service
 %{_bindir}/contactsd
 %{_libdir}/contactsd-1.0/plugins/*.so
 # we currently don't have a backup framework
@@ -82,8 +82,8 @@ make %{?_smp_mflags}
 %install
 make INSTALL_ROOT=%{buildroot} install
 
-mkdir -p %{buildroot}%{_libdir}/systemd/user/user-session.target.wants  
-ln -s ../contactsd.service %{buildroot}%{_libdir}/systemd/user/user-session.target.wants/
+mkdir -p %{buildroot}%{_libdir}/systemd/user/post-user-session.target.wants
+ln -s ../contactsd.service %{buildroot}%{_libdir}/systemd/user/post-user-session.target.wants/
 
 %post
 if [ "$1" -ge 1 ]; then
