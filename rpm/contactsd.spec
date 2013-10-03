@@ -37,6 +37,8 @@ information), and store it to QtContacts.
 %{_libdir}/systemd/user/post-user-session.target.wants/contactsd.service
 %{_bindir}/contactsd
 %{_libdir}/contactsd-1.0/plugins/*.so
+%{_datadir}/translations/contactsd.qm
+%{_datadir}/translations/contactsd_eng_en.qm
 # we currently don't have a backup framework
 %exclude /usr/share/backup-framework/applications/contactsd.conf
 
@@ -67,6 +69,17 @@ Requires: %{name} = %{version}-%{release}
 %files tests
 %defattr(-,root,root,-)
 /opt/tests/%{name}
+
+%package ts-devel
+Summary: Translation source for contactsd
+Group: System/Applications
+
+%description ts-devel
+Translation source for contactsd
+
+%files ts-devel
+%defattr(-,root,root,-)
+%{_datadir}/translations/source/contactsd.ts
 
 
 %prep

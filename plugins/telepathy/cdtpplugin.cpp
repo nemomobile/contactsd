@@ -27,6 +27,10 @@
 #include "cdtpplugin.h"
 #include "debug.h"
 
+#include <QCoreApplication>
+#include <QLocale>
+#include <QTranslator>
+
 using namespace Contactsd;
 
 CDTpPlugin::CDTpPlugin()
@@ -48,6 +52,16 @@ void CDTpPlugin::init()
     Tp::registerTypes();
     Tp::enableDebug(isDebugEnabled());
     Tp::enableWarnings(isWarningsEnabled());
+
+    const QString translationPath(QString::fromLatin1(TRANSLATIONS_INSTALL_PATH));
+
+    QTranslator *engineeringEnglish = new QTranslator(this);
+    engineeringEnglish->load(QString::fromLatin1("contactsd_eng_en"), translationPath);
+    qApp->installTranslator(engineeringEnglish);
+
+    QTranslator *translator = new QTranslator(this);
+    translator->load(QLocale(), QString::fromLatin1("contactsd"), QString::fromLatin1("-"), translationPath);
+    qApp->installTranslator(translator);
 
     debug() << "Creating controller";
     mController = new CDTpController(this);

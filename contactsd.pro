@@ -2,7 +2,7 @@ TEMPLATE = subdirs
 CONFIG += ordered
 QT -= gui
 
-SUBDIRS += src plugins tests
+SUBDIRS += src plugins tests translations
 
 PACKAGENAME=contactsd
 

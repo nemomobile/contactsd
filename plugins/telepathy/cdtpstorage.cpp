@@ -1075,6 +1075,16 @@ const QString &protocolType(const QString &protocol)
 }
 #endif
 
+template<typename F1, typename F2>
+void updateNameDetail(F1 getter, F2 setter, QContactName *nameDetail, const QString &value)
+{
+    QString existing((nameDetail->*getter)());
+    if (!existing.isEmpty()) {
+        existing.append(QChar::fromLatin1(' '));
+    }
+    (nameDetail->*setter)(existing + value);
+}
+
 void updateContactDetails(QNetworkAccessManager &network, QContact &existing, CDTpContactPtr contactWrapper, CDTpContact::Changes changes)
 {
     const QString contactAddress(imAddress(contactWrapper));
@@ -1148,6 +1158,8 @@ void updateContactDetails(QNetworkAccessManager &network, QContact &existing, CD
 
                 QContactOrganization organizationDetail;
                 QContactName nameDetail;
+                QString formattedName;
+                bool structuredName = false;
 
                 // Add any information reported by telepathy
                 foreach (const Tp::ContactInfoField &field, listContactInfo) {
@@ -1284,22 +1296,36 @@ void updateContactDetails(QNetworkAccessManager &network, QContact &existing, CD
                         if (detailContext != invalidContext) {
                             nameDetail.setContexts(detailContext);
                         }
-                        nameDetail.setLastName(asString(field, 0));
-                        nameDetail.setFirstName(asString(field, 1));
-                        nameDetail.setMiddleName(asString(field, 2));
-                        nameDetail.setPrefix(asString(field, 3));
-                        nameDetail.setSuffix(asString(field, 4));
+
+                        QString value(asString(field, 0));
+                        if (!value.isEmpty()) {
+                            nameDetail.setLastName(value);
+                        }
+                        value = asString(field, 1);
+                        if (!value.isEmpty()) {
+                            nameDetail.setFirstName(value);
+                        }
+                        value = asString(field, 2);
+                        if (!value.isEmpty()) {
+                            nameDetail.setMiddleName(value);
+                        }
+                        value = asString(field, 3);
+                        if (!value.isEmpty()) {
+                            nameDetail.setPrefix(value);
+                        }
+                        value = asString(field, 4);
+                        if (!value.isEmpty()) {
+                            nameDetail.setSuffix(value);
+                        }
+
+                        structuredName = true;
                     } else if (field.fieldName == QLatin1String("fn")) {
                         const QString fn(asString(field, 0));
                         if (!fn.isEmpty()) {
                             if (detailContext != invalidContext) {
                                 nameDetail.setContexts(detailContext);
                             }
-#ifdef USING_QTPIM
-                            nameDetail.setValue(QContactName__FieldCustomLabel, fn);
-#else
-                            nameDetail.setCustomLabel(fn);
-#endif
+                            formattedName = fn;
                         }
                     } else if (field.fieldName == QLatin1String("nickname")) {
                         const QString nickname(asString(field, 0));
@@ -1315,15 +1341,9 @@ void updateContactDetails(QNetworkAccessManager &network, QContact &existing, CD
                             }
 
                             // Use the nickname as the customLabel if we have no 'fn' data
-#ifdef USING_QTPIM
-                            if (stringValue(nameDetail, QContactName__FieldCustomLabel).isEmpty()) {
-                                nameDetail.setValue(QContactName__FieldCustomLabel, nickname);
+                            if (formattedName.isEmpty()) {
+                                formattedName = nickname;
                             }
-#else
-                            if (nameDetail.customLabel().isEmpty()) {
-                                nameDetail.setCustomLabel(nickname);
-                            }
-#endif
                         }
                     } else if (field.fieldName == QLatin1String("note") ||
                              field.fieldName == QLatin1String("desc")) {
@@ -1381,7 +1401,63 @@ void updateContactDetails(QNetworkAccessManager &network, QContact &existing, CD
                     }
                 }
 
-                if (!nameDetail.isEmpty()) {
+                if (structuredName || !formattedName.isEmpty()) {
+                    if (!structuredName) {
+                        // Try to parse the structure from the formatted name
+                        QStringList tokens(formattedName.split(QChar::fromLatin1(' '), QString::SkipEmptyParts));
+                        if (tokens.count() >= 2) {
+                            QString format;
+                            if (tokens.count() == 2) {
+                                //: Format string for allocating 2 tokens to name parts - 2 characters from the set [FMLPS]
+                                //% "FL"
+                                format = qtTrId("qtn_name_structure_2_tokens");
+                            } else if (tokens.count() == 3) {
+                                //: Format string for allocating 3 tokens to name parts - 3 characters from the set [FMLPS]
+                                //% "FML"
+                                format = qtTrId("qtn_name_structure_3_tokens");
+                            } else if (tokens.count() > 3) {
+                                //: Format string for allocating 4 tokens to name parts - 4 characters from the set [FMLPS]
+                                //% "FFML"
+                                format = qtTrId("qtn_name_structure_4_tokens");
+
+                                // Coalesce the leading tokens together to limit the possibilities
+                                int excess = tokens.count() - 4;
+                                if (excess > 0) {
+                                    QString first(tokens.takeFirst());
+                                    while (--excess >= 0) {
+                                        first += QChar::fromLatin1(' ') + tokens.takeFirst();
+                                    }
+                                    tokens.prepend(first);
+                                }
+                            }
+
+                            if (format.length() != tokens.length()) {
+                                qWarning() << "Invalid structure format for" << tokens.count() << "tokens:" << format;
+                            } else {
+                                foreach (const QChar &part, format) {
+                                    const QString token(tokens.takeFirst());
+                                    switch (part.toUpper().toLatin1()) {
+                                        case 'F': updateNameDetail(&QContactName::firstName, &QContactName::setFirstName, &nameDetail, token); break;
+                                        case 'M': updateNameDetail(&QContactName::middleName, &QContactName::setMiddleName, &nameDetail, token); break;
+                                        case 'L': updateNameDetail(&QContactName::lastName, &QContactName::setLastName, &nameDetail, token); break;
+                                        case 'P': updateNameDetail(&QContactName::prefix, &QContactName::setPrefix, &nameDetail, token); break;
+                                        case 'S': updateNameDetail(&QContactName::suffix, &QContactName::setSuffix, &nameDetail, token); break;
+                                        default:
+                                            qWarning() << "Invalid structure format character:" << part;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (!formattedName.isEmpty()) {
+#ifdef USING_QTPIM
+                        nameDetail.setValue(QContactName__FieldCustomLabel, formattedName);
+#else
+                        nameDetail.setCustomLabel(formattedName);
+#endif
+                    }
+
                     if (!storeContactDetail(existing, nameDetail, SRC_LOC)) {
                         warning() << SRC_LOC << "Unable to save name details to contact";
                     }
