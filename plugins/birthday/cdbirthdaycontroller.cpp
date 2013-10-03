@@ -288,15 +288,16 @@ CDBirthdayController::updateBirthdays(const QList<QContact> &changedBirthdays)
 
         // Display label or birthdate was removed from the contact, so delete it from the calendar.
         if (contactDisplayLabel.isEmpty() || contactBirthday.date().isNull()) {
-            debug() << "Contact: " << contact << " removed birthday or displayLabel, so delete the calendar event";
+            debug() << "Contact: " << apiId(contact) << " removed birthday or displayLabel, so delete the calendar event";
 
             mCalendar->deleteBirthday(apiId(contact));
         // Display label or birthdate was changed on the contact, so update the calendar.
         } else if ((contactDisplayLabel != calendarBirthday.summary()) ||
                    (contactBirthday.date() != calendarBirthday.date())) {
-            debug() << "Contact with calendar birthday: " << contactBirthday.date()
+            debug() << "Contact with calendar birthday: " << calendarBirthday.date()
                     << " and calendar displayLabel: " << calendarBirthday.summary()
-                    << " changed details to: " << contact << ", so update the calendar event";
+                    << " changed details to: " << contactBirthday.date() << contactDisplayLabel
+                    << ", so update the calendar event";
 
             mCalendar->updateBirthday(contact);
         }
