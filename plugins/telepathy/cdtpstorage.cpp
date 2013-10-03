@@ -495,7 +495,7 @@ void updateContacts(const QString &location, QList<QContact> *saveList, QList<Co
                 do {
                     int errorIndex = (*--it);
                     const QContact &badContact(batch.at(errorIndex));
-                    warning() << "Failed storing contact" << asString(apiId(badContact)) << "from:" << location;
+                    warning() << "Failed storing contact" << asString(apiId(badContact)) << "from:" << location << "error:" << errorMap.value(errorIndex);
                     output(debug(), badContact);
                     batch.removeAt(errorIndex);
                 } while (it != begin);
@@ -579,6 +579,11 @@ QHash<QString, QContact> findExistingContacts(const QStringList &contactAddresse
     }
 
     return rv;
+}
+
+QHash<QString, QContact> findExistingContacts(const QSet<QString> &contactAddresses)
+{
+    return findExistingContacts(contactAddresses.toList());
 }
 
 QContact findExistingContact(const QString &contactAddress)
@@ -1624,6 +1629,23 @@ void CDTpStorage::updateContactChanges(CDTpContactPtr contactWrapper, CDTpContac
     }
 }
 
+QList<CDTpContactPtr> accountContacts(CDTpAccountPtr accountWrapper)
+{
+    QList<CDTpContactPtr> rv;
+
+    QSet<QString> ids;
+    foreach (CDTpContactPtr contactWrapper, accountWrapper->contacts()) {
+        const QString id(contactWrapper->contact()->id());
+        if (ids.contains(id))
+            continue;
+
+        ids.insert(id);
+        rv.append(contactWrapper);
+    }
+
+    return rv;
+}
+
 void CDTpStorage::updateAccountChanges(QContact &self, QContactOnlineAccount &qcoa, CDTpAccountPtr accountWrapper, CDTpAccount::Changes changes)
 {
     Tp::AccountPtr account = accountWrapper->account();
@@ -1656,8 +1678,10 @@ void CDTpStorage::updateAccountChanges(QContact &self, QContactOnlineAccount &qc
             allChanges.insert(address, it.value() | CDTpContact::Presence);
         }
 
+        QList<CDTpContactPtr> tpContacts(accountContacts(accountWrapper));
+
         QStringList contactAddresses;
-        foreach (CDTpContactPtr contactWrapper, accountWrapper->contacts()) {
+        foreach (const CDTpContactPtr &contactWrapper, tpContacts) {
             const QString address = imAddress(accountPath, contactWrapper->contact()->id());
             contactAddresses.append(address);
         }
@@ -1668,7 +1692,7 @@ void CDTpStorage::updateAccountChanges(QContact &self, QContactOnlineAccount &qc
         QList<QContact> saveList;
         QList<ContactIdType> removeList;
 
-        foreach (CDTpContactPtr contactWrapper, accountWrapper->contacts()) {
+        foreach (const CDTpContactPtr &contactWrapper, tpContacts) {
             const QString address = imAddress(accountPath, contactWrapper->contact()->id());
 
             QHash<QString, QContact>::Iterator existing = existingContacts.find(address);
@@ -1813,8 +1837,10 @@ void CDTpStorage::createAccount(CDTpAccountPtr accountWrapper)
     // Add any previously unknown accounts
     addNewAccount(self, accountWrapper);
 
+    QList<CDTpContactPtr> tpContacts(accountContacts(accountWrapper));
+
     QStringList contactAddresses;
-    foreach (CDTpContactPtr contactWrapper, accountWrapper->contacts()) {
+    foreach (const CDTpContactPtr &contactWrapper, tpContacts) {
         const QString address = imAddress(accountPath, contactWrapper->contact()->id());
         contactAddresses.append(address);
     }
@@ -1826,7 +1852,7 @@ void CDTpStorage::createAccount(CDTpAccountPtr accountWrapper)
     QList<ContactIdType> removeList;
 
     // Add any contacts already present for this account
-    foreach (CDTpContactPtr contactWrapper, accountWrapper->contacts()) {
+    foreach (const CDTpContactPtr &contactWrapper, tpContacts) {
         const QString address = imAddress(accountPath, contactWrapper->contact()->id());
 
         QHash<QString, QContact>::Iterator existing = existingContacts.find(address);
@@ -1866,7 +1892,7 @@ void CDTpStorage::updateAccount(CDTpAccountPtr accountWrapper, CDTpAccount::Chan
 
 void CDTpStorage::removeAccount(CDTpAccountPtr accountWrapper)
 {
-    cancelQueuedUpdates(accountWrapper->contacts());
+    cancelQueuedUpdates(accountContacts(accountWrapper));
 
     QContact self(selfContact());
     if (self.isEmpty()) {
@@ -1919,8 +1945,12 @@ void CDTpStorage::syncAccountContacts(CDTpAccountPtr accountWrapper, const QList
 {
     const QString accountPath(imAccount(accountWrapper));
 
-    QStringList contactAddresses;
-    foreach (const CDTpContactPtr &contactWrapper, contactsAdded) {
+    // Ensure there are no duplicates in the list
+    QList<CDTpContactPtr> addedContacts(contactsAdded.toSet().toList());
+    QList<CDTpContactPtr> removedContacts(contactsRemoved.toSet().toList());
+
+    QSet<QString> contactAddresses;
+    foreach (const CDTpContactPtr &contactWrapper, addedContacts) {
         // This contact must be for the specified account
         if (imAccount(contactWrapper) != accountPath) {
             warning() << SRC_LOC << "Unable to add contact from wrong account:" << imAccount(contactWrapper) << accountPath;
@@ -1928,16 +1958,16 @@ void CDTpStorage::syncAccountContacts(CDTpAccountPtr accountWrapper, const QList
         }
 
         const QString address = imAddress(accountPath, contactWrapper->contact()->id());
-        contactAddresses.append(address);
+        contactAddresses.insert(address);
     }
-    foreach (const CDTpContactPtr &contactWrapper, contactsRemoved) {
+    foreach (const CDTpContactPtr &contactWrapper, removedContacts) {
         if (imAccount(contactWrapper) != accountPath) {
             warning() << SRC_LOC << "Unable to remove contact from wrong account:" << imAccount(contactWrapper) << accountPath;
             continue;
         }
 
         const QString address = imAddress(accountPath, contactWrapper->contact()->id());
-        contactAddresses.append(address);
+        contactAddresses.insert(address);
     }
 
     // Retrieve the existing contacts in a single batch
@@ -1946,7 +1976,7 @@ void CDTpStorage::syncAccountContacts(CDTpAccountPtr accountWrapper, const QList
     QList<QContact> saveList;
     QList<ContactIdType> removeList;
 
-    foreach (const CDTpContactPtr &contactWrapper, contactsAdded) {
+    foreach (const CDTpContactPtr &contactWrapper, addedContacts) {
         const QString address = imAddress(accountPath, contactWrapper->contact()->id());
 
         QHash<QString, QContact>::Iterator existing = existingContacts.find(address);
@@ -1957,7 +1987,7 @@ void CDTpStorage::syncAccountContacts(CDTpAccountPtr accountWrapper, const QList
 
         updateContactChanges(contactWrapper, CDTpContact::Added | CDTpContact::Information, *existing, &saveList, &removeList);
     }
-    foreach (const CDTpContactPtr &contactWrapper, contactsRemoved) {
+    foreach (const CDTpContactPtr &contactWrapper, removedContacts) {
         const QString address = imAddress(accountPath, contactWrapper->contact()->id());
 
         QHash<QString, QContact>::Iterator existing = existingContacts.find(address);
@@ -2039,13 +2069,19 @@ void CDTpStorage::onUpdateQueueTimeout()
 {
     debug() << "Update" << mUpdateQueue.count() << "contacts";
 
-    QStringList contactAddresses;
+    QHash<CDTpContactPtr, CDTpContact::Changes> updates;
+    QSet<QString> contactAddresses;
 
     QHash<CDTpContactPtr, CDTpContact::Changes>::const_iterator it = mUpdateQueue.constBegin(), end = mUpdateQueue.constEnd();
     for ( ; it != end; ++it) {
         CDTpContactPtr contactWrapper = it.key();
-        contactAddresses.append(imAddress(contactWrapper));
+
+        // If there are multiple entries for a contact, coalesce the changes
+        updates[contactWrapper] |= it.value();
+        contactAddresses.insert(imAddress(contactWrapper));
     }
+
+    mUpdateQueue.clear();
 
     // Retrieve the existing contacts in a single batch
     QHash<QString, QContact> existingContacts = findExistingContacts(contactAddresses);
@@ -2053,7 +2089,7 @@ void CDTpStorage::onUpdateQueueTimeout()
     QList<QContact> saveList;
     QList<ContactIdType> removeList;
 
-    for (it = mUpdateQueue.constBegin(); it != end; ++it) {
+    for (it = updates.constBegin(), end = updates.constEnd(); it != end; ++it) {
         CDTpContactPtr contactWrapper = it.key();
 
         // Skip the contact in case its account was deleted before this function
@@ -2066,6 +2102,7 @@ void CDTpStorage::onUpdateQueueTimeout()
         }
 
         const QString address(imAddress(contactWrapper));
+
         QHash<QString, QContact>::Iterator existing = existingContacts.find(address);
         if (existing == existingContacts.end()) {
             warning() << SRC_LOC << "No contact found for address:" << address;
@@ -2074,8 +2111,6 @@ void CDTpStorage::onUpdateQueueTimeout()
 
         updateContactChanges(contactWrapper, it.value(), *existing, &saveList, &removeList);
     }
-
-    mUpdateQueue.clear();
 
     updateContacts(SRC_LOC, &saveList, &removeList);
 }
