@@ -173,8 +173,8 @@ QString stringValue(const QContactDetail &detail, F field)
 
 namespace {
 
-const int UPDATE_TIMEOUT = 150; // ms
-const int UPDATE_THRESHOLD = 50; // contacts
+const int UPDATE_TIMEOUT = 250; // ms
+const int UPDATE_MAXIMUM_TIMEOUT = 2000; // ms
 
 QContactManager *manager()
 {
@@ -1520,12 +1520,14 @@ void addIconPath(QContactOnlineAccount &qcoa, Tp::AccountPtr account)
 } // namespace
 
 
-CDTpStorage::CDTpStorage(QObject *parent) : QObject(parent),
-    mUpdateRunning(false)
+CDTpStorage::CDTpStorage(QObject *parent)
+    : QObject(parent)
 {
     mUpdateTimer.setInterval(UPDATE_TIMEOUT);
     mUpdateTimer.setSingleShot(true);
     connect(&mUpdateTimer, SIGNAL(timeout()), SLOT(onUpdateQueueTimeout()));
+
+    mWaitTimer.invalidate();
 }
 
 CDTpStorage::~CDTpStorage()
@@ -2131,18 +2133,24 @@ void CDTpStorage::updateContact(CDTpContactPtr contactWrapper, CDTpContact::Chan
 {
     mUpdateQueue[contactWrapper] |= changes;
 
-    if (!mUpdateRunning) {
-        // Only update IM contacts in tracker after queuing 50 contacts or after
-        // not receiving an update notifiction for 150 ms. This dramatically reduces
-        // system but also keeps update latency within acceptable bounds.
-        if (!mUpdateTimer.isActive() || mUpdateQueue.count() < UPDATE_THRESHOLD) {
-            mUpdateTimer.start();
+    // Only update IM contacts after not receiving an update notification for the defined period
+    // Also use an upper limit to keep latency within acceptable bounds.
+    if (mWaitTimer.isValid()) {
+        if (mWaitTimer.elapsed() >= UPDATE_MAXIMUM_TIMEOUT) {
+            // Don't prolong the wait any further
+            return;
         }
+    } else {
+        mWaitTimer.start();
     }
+
+    mUpdateTimer.start();
 }
 
 void CDTpStorage::onUpdateQueueTimeout()
 {
+    mWaitTimer.invalidate();
+
     debug() << "Update" << mUpdateQueue.count() << "contacts";
 
     QHash<CDTpContactPtr, CDTpContact::Changes> updates;

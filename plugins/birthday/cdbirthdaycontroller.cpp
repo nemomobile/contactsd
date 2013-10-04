@@ -46,6 +46,8 @@ QTM_USE_NAMESPACE
 
 using namespace Contactsd;
 
+const int UPDATE_TIMEOUT = 1000; // ms
+
 CDBirthdayController::CDBirthdayController(QObject *parent)
     : QObject(parent)
     , mCalendar(0)
@@ -79,6 +81,10 @@ CDBirthdayController::CDBirthdayController(QObject *parent)
 
     mCalendar = new CDBirthdayCalendar(syncMode, this);
     updateAllBirthdays();
+
+    mUpdateTimer.setInterval(UPDATE_TIMEOUT);
+    mUpdateTimer.setSingleShot(true);
+    connect(&mUpdateTimer, SIGNAL(timeout()), SLOT(onUpdateQueueTimeout()));
 }
 
 CDBirthdayController::~CDBirthdayController()
@@ -88,7 +94,11 @@ CDBirthdayController::~CDBirthdayController()
 void
 CDBirthdayController::contactsChanged(const QList<ContactIdType>& contacts)
 {
-    fetchContacts(contacts);
+    foreach (const ContactIdType &id, contacts)
+        mUpdatedContacts.insert(id);
+
+    // Just restart the timer - if it doesn't expire, we can afford to wait
+    mUpdateTimer.start();
 }
 
 #ifdef USING_QTPIM
@@ -158,19 +168,26 @@ CDBirthdayController::onFullSyncRequestStateChanged(QContactAbstractRequest::Sta
     }
 }
 
+void
+CDBirthdayController::onUpdateQueueTimeout()
+{
+    fetchContacts(mUpdatedContacts);
+    mUpdatedContacts.clear();
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Incremental sync logic
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 void
-CDBirthdayController::fetchContacts(const QList<ContactIdType> &contactIds)
+CDBirthdayController::fetchContacts(const QSet<ContactIdType> &contactIds)
 {
 #ifdef USING_QTPIM
     QContactIdFilter fetchFilter;
 #else
     QContactLocalIdFilter fetchFilter;
 #endif
-    fetchFilter.setIds(contactIds);
+    fetchFilter.setIds(contactIds.toList());
 
     fetchContacts(fetchFilter, SLOT(onFetchRequestStateChanged(QContactAbstractRequest::State)));
 }

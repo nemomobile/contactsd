@@ -28,8 +28,10 @@
 #include <QContactOnlineAccount>
 
 #include <QByteArray>
+#include <QElapsedTimer>
 #include <QObject>
 #include <QString>
+#include <QTimer>
 #include <QUrl>
 #include <QNetworkAccessManager>
 
@@ -88,10 +90,10 @@ private:
     void updateContactChanges(CDTpContactPtr contactWrapper, CDTpContact::Changes changes);
 
 private:
-    QHash<CDTpContactPtr, CDTpContact::Changes> mUpdateQueue;
     QNetworkAccessManager mNetwork;
+    QHash<CDTpContactPtr, CDTpContact::Changes> mUpdateQueue;
     QTimer mUpdateTimer;
-    bool mUpdateRunning;
+    QElapsedTimer mWaitTimer;
 };
 
 #endif // CDTPSTORAGE_H

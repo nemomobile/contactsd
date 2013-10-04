@@ -24,7 +24,9 @@
 #ifndef CDBIRTHDAYCONTROLLER_H
 #define CDBIRTHDAYCONTROLLER_H
 
-#include <QtCore>
+#include <QSet>
+#include <QObject>
+#include <QTimer>
 
 #include <QContact>
 #include <QContactAbstractRequest>
@@ -70,6 +72,7 @@ private Q_SLOTS:
     void onFetchRequestStateChanged(QContactAbstractRequest::State newState);
     void onFullSyncRequestStateChanged(QContactAbstractRequest::State newState);
     void updateAllBirthdays();
+    void onUpdateQueueTimeout();
 
 private:
     bool stampFileExists();
@@ -78,7 +81,7 @@ private:
     bool processFetchRequest(QContactFetchRequest * const fetchRequest,
                              QContactAbstractRequest::State newState,
                              SyncMode syncMode = Incremental);
-    void fetchContacts(const QList<ContactIdType> &contactIds);
+    void fetchContacts(const QSet<ContactIdType> &contactIds);
     void fetchContacts(const QContactFilter &filter, const char *slot);
     void updateBirthdays(const QList<QContact> &changedBirthdays);
     void syncBirthdays(const QList<QContact> &birthdayContacts);
@@ -86,6 +89,8 @@ private:
 private:
     CDBirthdayCalendar *mCalendar;
     QContactManager *mManager;
+    QSet<ContactIdType> mUpdatedContacts;
+    QTimer mUpdateTimer;
 };
 
 #endif // CDBIRTHDAYCONTROLLER_H
