@@ -1108,6 +1108,71 @@ void updateNameDetail(F1 getter, F2 setter, QContactName *nameDetail, const QStr
     (nameDetail->*setter)(existing + value);
 }
 
+template<typename F1, typename F2>
+void replaceNameDetail(F1 getter, F2 setter, QContactName *nameDetail, const QString &value)
+{
+    if (!value.isEmpty()) {
+        (nameDetail->*setter)(value);
+    } else {
+        // If there is an existing value, remove it
+        QString existing((nameDetail->*getter)());
+        if (!existing.isEmpty()) {
+            (nameDetail->*setter)(value);
+        }
+    }
+}
+
+void decomposeNameDetails(const QString &formattedName, QContactName *nameDetail)
+{
+    // Try to parse the structure from the formatted name
+    // TODO: Use MBreakIterator for localized splitting
+    QStringList tokens(formattedName.split(QChar::fromLatin1(' '), QString::SkipEmptyParts));
+    if (tokens.count() >= 2) {
+        QString format;
+        if (tokens.count() == 2) {
+            //: Format string for allocating 2 tokens to name parts - 2 characters from the set [FMLPS]
+            //% "FL"
+            format = qtTrId("qtn_name_structure_2_tokens");
+        } else if (tokens.count() == 3) {
+            //: Format string for allocating 3 tokens to name parts - 3 characters from the set [FMLPS]
+            //% "FML"
+            format = qtTrId("qtn_name_structure_3_tokens");
+        } else if (tokens.count() > 3) {
+            //: Format string for allocating 4 tokens to name parts - 4 characters from the set [FMLPS]
+            //% "FFML"
+            format = qtTrId("qtn_name_structure_4_tokens");
+
+            // Coalesce the leading tokens together to limit the possibilities
+            int excess = tokens.count() - 4;
+            if (excess > 0) {
+                QString first(tokens.takeFirst());
+                while (--excess >= 0) {
+                    // TODO: local-specific join?
+                    first += QChar::fromLatin1(' ') + tokens.takeFirst();
+                }
+                tokens.prepend(first);
+            }
+        }
+
+        if (format.length() != tokens.length()) {
+            qWarning() << "Invalid structure format for" << tokens.count() << "tokens:" << format;
+        } else {
+            foreach (const QChar &part, format) {
+                const QString token(tokens.takeFirst());
+                switch (part.toUpper().toLatin1()) {
+                    case 'F': updateNameDetail(&QContactName::firstName, &QContactName::setFirstName, nameDetail, token); break;
+                    case 'M': updateNameDetail(&QContactName::middleName, &QContactName::setMiddleName, nameDetail, token); break;
+                    case 'L': updateNameDetail(&QContactName::lastName, &QContactName::setLastName, nameDetail, token); break;
+                    case 'P': updateNameDetail(&QContactName::prefix, &QContactName::setPrefix, nameDetail, token); break;
+                    case 'S': updateNameDetail(&QContactName::suffix, &QContactName::setSuffix, nameDetail, token); break;
+                    default:
+                        qWarning() << "Invalid structure format character:" << part;
+                }
+            }
+        }
+    }
+}
+
 void updateContactDetails(QNetworkAccessManager &network, QContact &existing, CDTpContactPtr contactWrapper, CDTpContact::Changes changes)
 {
     const QString contactAddress(imAddress(contactWrapper));
@@ -1320,26 +1385,11 @@ void updateContactDetails(QNetworkAccessManager &network, QContact &existing, CD
                             nameDetail.setContexts(detailContext);
                         }
 
-                        QString value(asString(field, 0));
-                        if (!value.isEmpty()) {
-                            nameDetail.setLastName(value);
-                        }
-                        value = asString(field, 1);
-                        if (!value.isEmpty()) {
-                            nameDetail.setFirstName(value);
-                        }
-                        value = asString(field, 2);
-                        if (!value.isEmpty()) {
-                            nameDetail.setMiddleName(value);
-                        }
-                        value = asString(field, 3);
-                        if (!value.isEmpty()) {
-                            nameDetail.setPrefix(value);
-                        }
-                        value = asString(field, 4);
-                        if (!value.isEmpty()) {
-                            nameDetail.setSuffix(value);
-                        }
+                        replaceNameDetail(&QContactName::lastName, &QContactName::setLastName, &nameDetail, asString(field, 0));
+                        replaceNameDetail(&QContactName::firstName, &QContactName::setFirstName, &nameDetail, asString(field, 1));
+                        replaceNameDetail(&QContactName::middleName, &QContactName::setMiddleName, &nameDetail, asString(field, 2));
+                        replaceNameDetail(&QContactName::prefix, &QContactName::setPrefix, &nameDetail, asString(field, 3));
+                        replaceNameDetail(&QContactName::suffix, &QContactName::setSuffix, &nameDetail, asString(field, 4));
 
                         structuredName = true;
                     } else if (field.fieldName == QLatin1String("fn")) {
@@ -1426,51 +1476,7 @@ void updateContactDetails(QNetworkAccessManager &network, QContact &existing, CD
 
                 if (structuredName || !formattedName.isEmpty()) {
                     if (!structuredName) {
-                        // Try to parse the structure from the formatted name
-                        QStringList tokens(formattedName.split(QChar::fromLatin1(' '), QString::SkipEmptyParts));
-                        if (tokens.count() >= 2) {
-                            QString format;
-                            if (tokens.count() == 2) {
-                                //: Format string for allocating 2 tokens to name parts - 2 characters from the set [FMLPS]
-                                //% "FL"
-                                format = qtTrId("qtn_name_structure_2_tokens");
-                            } else if (tokens.count() == 3) {
-                                //: Format string for allocating 3 tokens to name parts - 3 characters from the set [FMLPS]
-                                //% "FML"
-                                format = qtTrId("qtn_name_structure_3_tokens");
-                            } else if (tokens.count() > 3) {
-                                //: Format string for allocating 4 tokens to name parts - 4 characters from the set [FMLPS]
-                                //% "FFML"
-                                format = qtTrId("qtn_name_structure_4_tokens");
-
-                                // Coalesce the leading tokens together to limit the possibilities
-                                int excess = tokens.count() - 4;
-                                if (excess > 0) {
-                                    QString first(tokens.takeFirst());
-                                    while (--excess >= 0) {
-                                        first += QChar::fromLatin1(' ') + tokens.takeFirst();
-                                    }
-                                    tokens.prepend(first);
-                                }
-                            }
-
-                            if (format.length() != tokens.length()) {
-                                qWarning() << "Invalid structure format for" << tokens.count() << "tokens:" << format;
-                            } else {
-                                foreach (const QChar &part, format) {
-                                    const QString token(tokens.takeFirst());
-                                    switch (part.toUpper().toLatin1()) {
-                                        case 'F': updateNameDetail(&QContactName::firstName, &QContactName::setFirstName, &nameDetail, token); break;
-                                        case 'M': updateNameDetail(&QContactName::middleName, &QContactName::setMiddleName, &nameDetail, token); break;
-                                        case 'L': updateNameDetail(&QContactName::lastName, &QContactName::setLastName, &nameDetail, token); break;
-                                        case 'P': updateNameDetail(&QContactName::prefix, &QContactName::setPrefix, &nameDetail, token); break;
-                                        case 'S': updateNameDetail(&QContactName::suffix, &QContactName::setSuffix, &nameDetail, token); break;
-                                        default:
-                                            qWarning() << "Invalid structure format character:" << part;
-                                    }
-                                }
-                            }
-                        }
+                        decomposeNameDetails(formattedName, &nameDetail);
                     }
 
                     if (!formattedName.isEmpty()) {
@@ -1633,7 +1639,7 @@ void CDTpStorage::removeExistingAccount(QContact &self, QContactOnlineAccount &e
     }
 }
 
-bool CDTpStorage::initializeNewContact(QContact &newContact, CDTpAccountPtr accountWrapper, const QString &contactId)
+bool CDTpStorage::initializeNewContact(QContact &newContact, CDTpAccountPtr accountWrapper, const QString &contactId, const QString &alias)
 {
     Tp::AccountPtr account = accountWrapper->account();
 
@@ -1687,12 +1693,45 @@ bool CDTpStorage::initializeNewContact(QContact &newContact, CDTpAccountPtr acco
     presence.setDetailUri(contactPresence);
     presence.setLinkedDetailUris(contactAddress);
     presence.setPresenceState(qContactPresenceState(Tp::ConnectionPresenceTypeUnknown));
+    if (!alias.isEmpty()) {
+        presence.setNickname(alias);
+    }
 
     if (!storeContactDetail(newContact, presence, SRC_LOC)) {
         warning() << SRC_LOC << "Unable to save presence to contact for:" << contactAddress;
         return false;
     }
+
+    // Initially we will have no name detail - try to extract it from the alias
+    if (!alias.isEmpty()) {
+        QContactName name;
+
+        decomposeNameDetails(alias, &name);
+
+#ifdef USING_QTPIM
+        name.setValue(QContactName__FieldCustomLabel, alias);
+#else
+        name.setCustomLabel(alias);
+#endif
+
+        if (!storeContactDetail(newContact, name, SRC_LOC)) {
+            warning() << SRC_LOC << "Unable to save name to contact for:" << contactAddress;
+            return false;
+        }
+    }
+
     return true;
+}
+
+bool CDTpStorage::initializeNewContact(QContact &newContact, CDTpContactPtr contactWrapper)
+{
+    CDTpAccountPtr accountWrapper = contactWrapper->accountWrapper();
+    Tp::ContactPtr contact = contactWrapper->contact();
+
+    const QString id(contact->id());
+    const QString alias(contact->alias().trimmed());
+
+    return initializeNewContact(newContact, accountWrapper, id, alias);
 }
 
 void CDTpStorage::updateContactChanges(CDTpContactPtr contactWrapper, CDTpContact::Changes changes)
@@ -1718,7 +1757,7 @@ void CDTpStorage::updateContactChanges(CDTpContactPtr contactWrapper, CDTpContac
         }
     } else {
         if (existing.isEmpty()) {
-            if (!initializeNewContact(existing, contactWrapper->accountWrapper(), contactWrapper->contact()->id())) {
+            if (!initializeNewContact(existing, contactWrapper)) {
                 warning() << SRC_LOC << "Unable to create contact for account:" << accountPath << contactAddress;
                 return;
             }
@@ -2115,7 +2154,7 @@ void CDTpStorage::createAccountContacts(CDTpAccountPtr accountWrapper, const QSt
 
     foreach (const QString &id, imIds) {
         QContact newContact;
-        if (!initializeNewContact(newContact, accountWrapper, id)) {
+        if (!initializeNewContact(newContact, accountWrapper, id, QString())) {
             warning() << SRC_LOC << "Unable to create contact for account:" << accountPath << id;
         } else {
             saveList.append(newContact);

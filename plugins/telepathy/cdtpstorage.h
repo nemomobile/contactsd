@@ -81,7 +81,8 @@ private:
 
     void updateAccountChanges(QContact &self, QContactOnlineAccount &qcoa, CDTpAccountPtr accountWrapper, CDTpAccount::Changes changes);
 
-    bool initializeNewContact(QContact &newContact, CDTpAccountPtr accountWrapper, const QString &contactId);
+    bool initializeNewContact(QContact &newContact, CDTpAccountPtr accountWrapper, const QString &contactId, const QString &alias);
+    bool initializeNewContact(QContact &newContact, CDTpContactPtr contactWrapper);
 #ifdef USING_QTPIM
     void updateContactChanges(CDTpContactPtr contactWrapper, CDTpContact::Changes changes, QContact &existing, QList<QContact> *saveList, QList<QContactId> *removeList);
 #else
