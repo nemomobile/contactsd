@@ -617,6 +617,22 @@ T findLinkedDetail(const QContact &owner, const QContactDetail &link)
     return T();
 }
 
+template<typename T>
+QList<T> findLinkedDetails(const QContact &owner, const QContactDetail &link)
+{
+    QList<T> rv;
+
+    const QString linkUri(link.detailUri());
+
+    foreach (const T &detail, owner.details<T>()) {
+        if (detail.linkedDetailUris().contains(linkUri)) {
+            rv.append(detail);
+        }
+    }
+
+    return rv;
+}
+
 QContactPresence findPresenceForAccount(const QContact &owner, const QContactOnlineAccount &qcoa)
 {
     return findLinkedDetail<QContactPresence>(owner, qcoa);
@@ -624,7 +640,18 @@ QContactPresence findPresenceForAccount(const QContact &owner, const QContactOnl
 
 QContactAvatar findAvatarForAccount(const QContact &owner, const QContactOnlineAccount &qcoa)
 {
-    return findLinkedDetail<QContactAvatar>(owner, qcoa);
+    static const QString coverMetadata(QString::fromLatin1("cover"));
+
+    // If there are multiple avatars, find the first that is not a cover
+    foreach (const QContactAvatar &avatar, findLinkedDetails<QContactAvatar>(owner, qcoa)) {
+        const QString metadata(avatar.value(QContactAvatar__FieldAvatarMetadata).toString());
+        if (metadata == coverMetadata)
+            continue;
+
+        return avatar;
+    }
+
+    return QContactAvatar();
 }
 
 QString imAccount(Tp::AccountPtr account)
@@ -768,19 +795,17 @@ QStringList currentCapabilites(const Tp::CapabilitiesBase &capabilities, Tp::Con
 
 void updateContactAvatars(QContact &contact, const QString &defaultAvatarPath, const QString &largeAvatarPath, const QContactOnlineAccount &qcoa)
 {
+    static const QString coverMetadata(QString::fromLatin1("cover"));
+
     QContactAvatar defaultAvatar;
     QContactAvatar largeAvatar;
 
     foreach (const QContactAvatar &detail, contact.details<QContactAvatar>()) {
-#ifdef USING_QTPIM
-        const QList<int> &contexts(detail.contexts());
-#else
-        const QStringList &contexts(detail.contexts());
-#endif
-        if (contexts.contains(QContactDetail__ContextDefault)) {
-            defaultAvatar = detail;
-        } else if (contexts.contains(QContactDetail__ContextLarge)) {
+        const QString metadata(detail.value(QContactAvatar__FieldAvatarMetadata).toString());
+        if (metadata == coverMetadata) {
             largeAvatar = detail;
+        } else {
+            defaultAvatar = detail;
         }
     }
 
@@ -792,7 +817,6 @@ void updateContactAvatars(QContact &contact, const QString &defaultAvatarPath, c
         }
     } else {
         defaultAvatar.setImageUrl(QUrl::fromLocalFile(defaultAvatarPath));
-        defaultAvatar.setContexts(QContactDetail__ContextDefault);
         defaultAvatar.setLinkedDetailUris(qcoa.detailUri());
         if (!storeContactDetail(contact, defaultAvatar, SRC_LOC)) {
             warning() << SRC_LOC << "Unable to save default avatar for contact:" << contact.id();
@@ -807,7 +831,7 @@ void updateContactAvatars(QContact &contact, const QString &defaultAvatarPath, c
         }
     } else {
         largeAvatar.setImageUrl(QUrl::fromLocalFile(largeAvatarPath));
-        largeAvatar.setContexts(QContactDetail__ContextLarge);
+        largeAvatar.setValue(QContactAvatar__FieldAvatarMetadata, coverMetadata);
         largeAvatar.setLinkedDetailUris(qcoa.detailUri());
         if (!storeContactDetail(contact, largeAvatar, SRC_LOC)) {
             warning() << SRC_LOC << "Unable to save large avatar for contact:" << contact.id();
@@ -934,7 +958,6 @@ CDTpContact::Changes updateAccountDetails(QContact &self, QContactOnlineAccount 
             }
         } else {
             avatar.setImageUrl(QUrl::fromLocalFile(avatarPath));
-            avatar.setContexts(QContactDetail__ContextDefault);
 
             if (!storeContactDetail(self, avatar, SRC_LOC)) {
                 warning() << SRC_LOC << "Unable to save avatar for account:" << accountPath;
