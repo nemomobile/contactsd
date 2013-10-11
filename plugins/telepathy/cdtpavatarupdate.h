@@ -42,6 +42,7 @@ public:
 
     explicit CDTpAvatarUpdate(QNetworkReply *networkReply,
                               CDTpContact *contactWrapper,
+                              const QString &filename,
                               const QString &avatarType,
                               QObject *parent = 0);
 
@@ -62,6 +63,7 @@ private:
 private:
     QPointer<QNetworkReply> mNetworkReply;
     QPointer<CDTpContact> mContactWrapper;
+    const QString mFilename;
     const QString mAvatarType;
     const QDir mCacheDir;
     QString mAvatarPath;

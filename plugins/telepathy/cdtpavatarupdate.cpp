@@ -34,13 +34,15 @@ const QString CDTpAvatarUpdate::Square = QLatin1String("square");
 
 CDTpAvatarUpdate::CDTpAvatarUpdate(QNetworkReply *networkReply,
                                    CDTpContact *contactWrapper,
+                                   const QString &filename,
                                    const QString &avatarType,
                                    QObject *parent)
     : QObject(parent)
     , mNetworkReply(0)
     , mContactWrapper(contactWrapper)
+    , mFilename(filename)
     , mAvatarType(avatarType)
-    , mCacheDir(CDTpPlugin::cacheFileName(QLatin1String("avatars/") % mAvatarType))
+    , mCacheDir(CDTpPlugin::cacheFileName(QLatin1String("avatars")))
 {
     setNetworkReply(networkReply);
 }
@@ -113,8 +115,13 @@ void CDTpAvatarUpdate::onRequestFinished()
     const QString avatarUrl = (not redirectionTarget.isEmpty() ? mNetworkReply->url().resolved(redirectionTarget)
                                                                : mNetworkReply->url()).toString();
 
-    QByteArray avatarHash = QCryptographicHash::hash(avatarUrl.toUtf8(), QCryptographicHash::Sha1);
-    QFile avatarFile(mCacheDir.absoluteFilePath(QString::fromLatin1(avatarHash.toHex())));
+    QString filename(mFilename);
+    if (filename.isEmpty()) {
+        QByteArray avatarHash = QCryptographicHash::hash(avatarUrl.toUtf8(), QCryptographicHash::Sha1);
+        filename = QString::fromLatin1(avatarHash.toHex());
+    }
+
+    QFile avatarFile(mCacheDir.absoluteFilePath(filename));
 
     // Check for existing avatar file and its size to see if we need to fetch from network.
     const qint64 contentLength = mNetworkReply->header(QNetworkRequest::ContentLengthHeader).toLongLong();
@@ -147,7 +154,6 @@ void CDTpAvatarUpdate::onRequestFinished()
         } else if (mAvatarType == Large) {
             mContactWrapper->setLargeAvatarPath(mAvatarPath);
         }
-
     }
 
     setNetworkReply(0);

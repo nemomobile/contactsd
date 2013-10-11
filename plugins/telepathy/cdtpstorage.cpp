@@ -617,22 +617,6 @@ T findLinkedDetail(const QContact &owner, const QContactDetail &link)
     return T();
 }
 
-template<typename T>
-QList<T> findLinkedDetails(const QContact &owner, const QContactDetail &link)
-{
-    QList<T> rv;
-
-    const QString linkUri(link.detailUri());
-
-    foreach (const T &detail, owner.details<T>()) {
-        if (detail.linkedDetailUris().contains(linkUri)) {
-            rv.append(detail);
-        }
-    }
-
-    return rv;
-}
-
 QContactPresence findPresenceForAccount(const QContact &owner, const QContactOnlineAccount &qcoa)
 {
     return findLinkedDetail<QContactPresence>(owner, qcoa);
@@ -640,18 +624,7 @@ QContactPresence findPresenceForAccount(const QContact &owner, const QContactOnl
 
 QContactAvatar findAvatarForAccount(const QContact &owner, const QContactOnlineAccount &qcoa)
 {
-    static const QString coverMetadata(QString::fromLatin1("cover"));
-
-    // If there are multiple avatars, find the first that is not a cover
-    foreach (const QContactAvatar &avatar, findLinkedDetails<QContactAvatar>(owner, qcoa)) {
-        const QString metadata(avatar.value(QContactAvatar__FieldAvatarMetadata).toString());
-        if (metadata == coverMetadata)
-            continue;
-
-        return avatar;
-    }
-
-    return QContactAvatar();
+    return findLinkedDetail<QContactAvatar>(owner, qcoa);
 }
 
 QString imAccount(Tp::AccountPtr account)
@@ -793,52 +766,6 @@ QStringList currentCapabilites(const Tp::CapabilitiesBase &capabilities, Tp::Con
     return current;
 }
 
-void updateContactAvatars(QContact &contact, const QString &defaultAvatarPath, const QString &largeAvatarPath, const QContactOnlineAccount &qcoa)
-{
-    static const QString coverMetadata(QString::fromLatin1("cover"));
-
-    QContactAvatar defaultAvatar;
-    QContactAvatar largeAvatar;
-
-    foreach (const QContactAvatar &detail, contact.details<QContactAvatar>()) {
-        const QString metadata(detail.value(QContactAvatar__FieldAvatarMetadata).toString());
-        if (metadata == coverMetadata) {
-            largeAvatar = detail;
-        } else {
-            defaultAvatar = detail;
-        }
-    }
-
-    if (defaultAvatarPath.isEmpty()) {
-        if (!defaultAvatar.isEmpty()) {
-            if (!contact.removeDetail(&defaultAvatar)) {
-                warning() << SRC_LOC << "Unable to remove default avatar from contact:" << contact.id();
-            }
-        }
-    } else {
-        defaultAvatar.setImageUrl(QUrl::fromLocalFile(defaultAvatarPath));
-        defaultAvatar.setLinkedDetailUris(qcoa.detailUri());
-        if (!storeContactDetail(contact, defaultAvatar, SRC_LOC)) {
-            warning() << SRC_LOC << "Unable to save default avatar for contact:" << contact.id();
-        }
-    }
-
-    if (largeAvatarPath.isEmpty()) {
-        if (!largeAvatar.isEmpty()) {
-            if (!contact.removeDetail(&largeAvatar)) {
-                warning() << SRC_LOC << "Unable to remove large avatar from contact:" << contact.id();
-            }
-        }
-    } else {
-        largeAvatar.setImageUrl(QUrl::fromLocalFile(largeAvatarPath));
-        largeAvatar.setValue(QContactAvatar__FieldAvatarMetadata, coverMetadata);
-        largeAvatar.setLinkedDetailUris(qcoa.detailUri());
-        if (!storeContactDetail(contact, largeAvatar, SRC_LOC)) {
-            warning() << SRC_LOC << "Unable to save large avatar for contact:" << contact.id();
-        }
-    }
-}
-
 QString saveAccountAvatar(CDTpAccountPtr accountWrapper)
 {
     const Tp::Avatar &avatar = accountWrapper->account()->avatar();
@@ -884,6 +811,7 @@ void updateFacebookAvatar(QNetworkAccessManager &network, CDTpContactPtr contact
     // update a second time, causing a double free.
     QObject *const update = new CDTpAvatarUpdate(network.get(QNetworkRequest(avatarUrl)),
                                                  contactWrapper.data(),
+                                                 QString::fromLatin1("%1-picture.jpg").arg(facebookId),
                                                  avatarType,
                                                  contactWrapper.data());
 
@@ -904,8 +832,8 @@ void updateSocialAvatars(QNetworkAccessManager &network, CDTpContactPtr contactW
 
     const QString socialId = facebookIdPattern.cap(1);
 
+    // Ignore the square avatar, we only need the large one
     updateFacebookAvatar(network, contactWrapper, socialId, CDTpAvatarUpdate::Large);
-    updateFacebookAvatar(network, contactWrapper, socialId, CDTpAvatarUpdate::Square);
 }
 
 CDTpContact::Changes updateAccountDetails(QContact &self, QContactOnlineAccount &qcoa, QContactPresence &presence, CDTpAccountPtr accountWrapper, CDTpAccount::Changes changes)
@@ -1495,13 +1423,28 @@ void updateContactDetails(QNetworkAccessManager &network, QContact &existing, CD
         }
     }
     if (changes & CDTpContact::Avatar) {
-        QString defaultAvatarPath = contact->avatarData().fileName;
-        if (defaultAvatarPath.isEmpty()) {
-            defaultAvatarPath = contactWrapper->squareAvatarPath();
+        // Prefer the large avatar if available
+        QString avatarPath(contactWrapper->largeAvatarPath());
+        if (avatarPath.isEmpty()) {
+            avatarPath = contact->avatarData().fileName;
         }
 
-        QContactOnlineAccount qcoa = existing.detail<QContactOnlineAccount>();
-        updateContactAvatars(existing, defaultAvatarPath, contactWrapper->largeAvatarPath(), qcoa);
+        QContactAvatar avatar = existing.detail<QContactAvatar>();
+
+        if (avatarPath.isEmpty()) {
+            // Remove the avatar detail
+            if (!existing.removeDetail(&avatar)) {
+                warning() << SRC_LOC << "Unable to remove avatar from contact:" << contactAddress;
+            }
+        } else {
+            QContactOnlineAccount qcoa = existing.detail<QContactOnlineAccount>();
+
+            avatar.setImageUrl(QUrl::fromLocalFile(avatarPath));
+            avatar.setLinkedDetailUris(qcoa.detailUri());
+            if (!storeContactDetail(existing, avatar, SRC_LOC)) {
+                warning() << SRC_LOC << "Unable to save avatar for contact:" << contactAddress;
+            }
+        }
     }
     if (changes & CDTpContact::DefaultAvatar) {
         updateSocialAvatars(network, contactWrapper);
