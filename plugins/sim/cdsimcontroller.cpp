@@ -26,19 +26,15 @@
 
 using namespace Contactsd;
 
-CDSimController::CDSimController(QObject *parent)
+CDSimController::CDSimController(QObject *parent, const QString &syncTarget)
     : QObject(parent)
     // Temporary override until qtpim supports QTCONTACTS_MANAGER_OVERRIDE
     , m_manager(QStringLiteral("org.nemomobile.contacts.sqlite"))
     , m_simPresent(false)
+    , m_simSyncTarget(syncTarget)
     , m_busy(false)
     , m_voicemailConf(0)
 {
-    m_fetchIdsRequest.setManager(&m_manager);
-    m_fetchRequest.setManager(&m_manager);
-    m_saveRequest.setManager(&m_manager);
-    m_removeRequest.setManager(&m_manager);
-
     connect(&m_phonebook, SIGNAL(importReady(const QString &)),
             this, SLOT(vcardDataAvailable(const QString &)));
     connect(&m_phonebook, SIGNAL(importFailed()),
@@ -50,28 +46,6 @@ CDSimController::CDSimController(QObject *parent)
     connect(&m_contactReader, SIGNAL(stateChanged(QVersitReader::State)),
             this, SLOT(readerStateChanged(QVersitReader::State)));
 
-    connect(&m_fetchIdsRequest, SIGNAL(resultsAvailable()),
-            this, SLOT(contactIdsAvailable()));
-    connect(&m_fetchIdsRequest, SIGNAL(stateChanged(QContactAbstractRequest::State)),
-            this, SLOT(requestStateChanged(QContactAbstractRequest::State)));
-
-    // Fetch only the nickname and phone details for imported contacts
-    QContactFetchHint hint;
-    hint.setDetailTypesHint(QList<QContactDetail::DetailType>() << QContactNickname::Type << QContactPhoneNumber::Type);
-    hint.setOptimizationHints(QContactFetchHint::NoRelationships | QContactFetchHint::NoActionPreferences | QContactFetchHint::NoBinaryBlobs);
-    m_fetchRequest.setFetchHint(hint);
-
-    connect(&m_fetchRequest, SIGNAL(resultsAvailable()),
-            this, SLOT(contactsAvailable()));
-    connect(&m_fetchRequest, SIGNAL(stateChanged(QContactAbstractRequest::State)),
-            this, SLOT(requestStateChanged(QContactAbstractRequest::State)));
-
-    connect(&m_saveRequest, SIGNAL(stateChanged(QContactAbstractRequest::State)),
-            this, SLOT(requestStateChanged(QContactAbstractRequest::State)));
-
-    connect(&m_removeRequest, SIGNAL(stateChanged(QContactAbstractRequest::State)),
-            this, SLOT(requestStateChanged(QContactAbstractRequest::State)));
-
     // Resync the contacts list whenever the SIM is inserted/removed
     connect(&m_simManager, SIGNAL(presenceChanged(bool)),
             this, SLOT(simPresenceChanged(bool)));
@@ -81,20 +55,17 @@ CDSimController::~CDSimController()
 {
 }
 
+QContactDetailFilter CDSimController::simSyncTargetFilter() const
+{
+    QContactDetailFilter syncTargetFilter;
+    syncTargetFilter.setDetailType(QContactSyncTarget::Type, QContactSyncTarget::FieldSyncTarget);
+    syncTargetFilter.setValue(m_simSyncTarget);
+    return syncTargetFilter;
+}
+
 QContactManager &CDSimController::contactManager()
 {
     return m_manager;
-}
-
-void CDSimController::setSyncTarget(const QString &syncTarget)
-{
-    m_syncTarget = syncTarget;
-
-    // Search for contacts with this syncTarget
-    QContactDetailFilter syncTargetFilter;
-    syncTargetFilter.setDetailType(QContactSyncTarget::Type, QContactSyncTarget::FieldSyncTarget);
-    syncTargetFilter.setValue(m_syncTarget);
-    m_fetchIdsRequest.setFilter(syncTargetFilter);
 }
 
 void CDSimController::setModemPath(const QString &path)
@@ -129,7 +100,7 @@ void CDSimController::simPresenceChanged(bool present)
 
         updateVoicemailConfiguration();
 
-        if (m_syncTarget.isEmpty()) {
+        if (m_simSyncTarget.isEmpty()) {
             qWarning() << "No sync target is configured";
         } else {
             if (m_simPresent) {
@@ -143,12 +114,7 @@ void CDSimController::simPresenceChanged(bool present)
                 }
             } else {
                 // Find any contacts that we need to remove
-                if (!m_fetchIdsRequest.isActive()) {
-                    m_contactIds.clear();
-                    m_contacts.clear();
-                    m_fetchIdsRequest.start();
-                    setBusy(true);
-                }
+                removeAllSimContacts();
             }
         }
     }
@@ -177,100 +143,97 @@ void CDSimController::readerStateChanged(QVersitReader::State state)
     QList<QVersitDocument> results = m_contactReader.results();
     if (results.isEmpty()) {
         qDebug() << "No contacts found in SIM";
+        m_simContacts.clear();
+        removeAllSimContacts();
     } else {
         QVersitContactImporter importer;
         importer.importDocuments(results);
         m_simContacts = importer.contacts();
         if (m_simContacts.isEmpty()) {
             qDebug() << "No contacts imported from SIM data";
-        }
-    }
-
-    // Fetch the set of SIM contact IDs
-    m_contactIds.clear();
-    m_contacts.clear();
-    m_fetchIdsRequest.start();
-    setBusy(true);
-}
-
-void CDSimController::contactIdsAvailable()
-{
-    // Ensure we don't duplicate any IDs
-    foreach (const QContactId &id, m_fetchIdsRequest.ids()) {
-        m_contactIds.insert(id);
-    }
-}
-
-void CDSimController::requestStateChanged(QContactAbstractRequest::State state)
-{
-    if (state != QContactAbstractRequest::FinishedState)
-        return;
-
-    QContactAbstractRequest *request = qobject_cast<QContactAbstractRequest *>(sender());
-    if (request->error() != QContactManager::NoError) {
-        qWarning() << "Error:" << request->error() << "from request:" << *request;
-    }
-
-    if (request == &m_fetchIdsRequest) {
-        if (m_simPresent) {
-            if (!m_contactIds.isEmpty()) {
-                // Fetch the contact details so we can compare with the SIM contacts
-                m_fetchRequest.setIds(m_contactIds.toList());
-                m_fetchRequest.start();
-            } else {
-                ensureSimContactsPresent();
-            }
-        } else {
             removeAllSimContacts();
-        }
-    } else if (request == &m_fetchRequest) {
-        if (m_simPresent) {
-            // Compare the imported contacts with the SIM contacts
+        } else {
+            // import or remove contacts from local storage as necessary.
             ensureSimContactsPresent();
-        } else {
-            removeAllSimContacts();
-        }
-    } else {
-        if (!m_saveRequest.isActive() && !m_removeRequest.isActive()) {
-            setBusy(false);
         }
     }
-}
 
-void CDSimController::contactsAvailable()
-{
-    m_contacts.append(m_fetchRequest.contacts());
+    setBusy(false);
 }
 
 void CDSimController::removeAllSimContacts()
 {
-    if (!m_contactIds.isEmpty()) {
-        // Remove all SIM contacts from the store
-        m_removeRequest.setContactIds(m_contactIds.toList());
-        m_removeRequest.start();
-    } else {
-        setBusy(false);
+    QList<QContactId> doomedIds = m_manager.contactIds(simSyncTargetFilter());
+    if (doomedIds.size()) {
+        if (!m_manager.removeContacts(doomedIds)) {
+            qWarning() << "Error removing sim contacts from device storage";
+        }
     }
 }
 
 void CDSimController::ensureSimContactsPresent()
 {
     // Ensure all contacts from the SIM are present in the store
+    QContactFetchHint hint;
+    hint.setDetailTypesHint(QList<QContactDetail::DetailType>() << QContactNickname::Type << QContactPhoneNumber::Type);
+    hint.setOptimizationHints(QContactFetchHint::NoRelationships | QContactFetchHint::NoActionPreferences | QContactFetchHint::NoBinaryBlobs);
+    QList<QContact> allSimContacts = m_manager.contacts(simSyncTargetFilter(), QList<QContactSortOrder>(), hint);
 
     QMap<QString, QContact> existingContacts;
-    foreach (const QContact &contact, m_contacts) {
+    foreach (const QContact &contact, allSimContacts) {
         // Identify imported SIM contacts by their nickname record
-        const QString nickname(contact.detail<QContactNickname>().nickname());
+        const QString nickname(contact.detail<QContactNickname>().nickname().trimmed());
         existingContacts.insert(nickname, contact);
     }
 
-    QList<QContact> importContacts;
+    // coalesce SIM contacts with the same display label.
+    QList<QContact> coalescedSimContacts;
+    foreach (const QContact &simContact, m_simContacts) {
+        const QContactDisplayLabel &displayLabel = simContact.detail<QContactDisplayLabel>();
+        const QList<QContactPhoneNumber> &phoneNumbers = simContact.details<QContactPhoneNumber>();
 
-    foreach (QContact simContact, m_simContacts) {
+        // search for a pre-existing match in the coalesced list.
+        bool coalescedContactFound = false;
+        for (int i = 0; i < coalescedSimContacts.size(); ++i) {
+            QContact coalescedContact = coalescedSimContacts.at(i);
+            if (coalescedContact.detail<QContactDisplayLabel>().label().trimmed() == displayLabel.label().trimmed()) {
+                // found a match.  Coalesce the phone numbers and update the contact in the list.
+                QList<QContactPhoneNumber> coalescedPhoneNumbers = coalescedContact.details<QContactPhoneNumber>();
+                foreach (QContactPhoneNumber phn, phoneNumbers) {
+                    // check to see if the coalesced phone numbers list contains this number
+                    bool coalescedNumberFound = false;
+                    foreach (QContactPhoneNumber cphn, coalescedPhoneNumbers) {
+                        // note: we don't check metadata (subtypes/contexts)
+                        if (phn.number() == cphn.number()) {
+                            coalescedNumberFound = true;
+                            break;
+                        }
+                    }
+
+                    // if not, add the number to the coalesced contact and to the coalesced list
+                    if (!coalescedNumberFound) {
+                        coalescedContact.saveDetail(&phn);
+                        coalescedPhoneNumbers.append(phn);
+                    }
+                }
+                coalescedSimContacts.replace(i, coalescedContact);
+                coalescedContactFound = true;
+                break;
+            }
+        }
+
+        // no match? add to list.
+        if (!coalescedContactFound) {
+            coalescedSimContacts.append(simContact);
+        }
+    }
+
+    QList<QContact> importContacts;
+    foreach (QContact simContact, coalescedSimContacts) {
         // SIM imports have their name in the display label
         QContactDisplayLabel displayLabel = simContact.detail<QContactDisplayLabel>();
 
-        QMap<QString, QContact>::iterator it = existingContacts.find(displayLabel.label());
+        QMap<QString, QContact>::iterator it = existingContacts.find(displayLabel.label().trimmed());
         if (it != existingContacts.end()) {
             // Ensure this contact has the right phone numbers
             QContact &dbContact(*it);
@@ -281,7 +244,7 @@ void CDSimController::ensureSimContactsPresent()
             }
 
             bool modified = false;
-
+            QList<QString> seenBeforeNumber;
             foreach (QContactPhoneNumber phoneNumber, simContact.details<QContactPhoneNumber>()) {
                 QMap<QString, QContactPhoneNumber>::iterator nit = existingNumbers.find(phoneNumber.number());
                 if (nit != existingNumbers.end()) {
@@ -298,8 +261,9 @@ void CDSimController::ensureSimContactsPresent()
                         modified = true;
                     }
 
+                    seenBeforeNumber.append(phoneNumber.number());
                     existingNumbers.erase(nit);
-                } else {
+                } else if (!seenBeforeNumber.contains(phoneNumber.number())) {
                     // Add this number to the storedContact
                     dbContact.saveDetail(&phoneNumber);
                     modified = true;
@@ -318,20 +282,19 @@ void CDSimController::ensureSimContactsPresent()
                 // Add the modified contact to the import set
                 importContacts.append(dbContact);
             }
-
             existingContacts.erase(it);
         } else {
             // We need to import this contact
 
             // Convert the display label to a nickname; display label is managed by the backend
             QContactNickname nickname = simContact.detail<QContactNickname>();
-            nickname.setNickname(displayLabel.label());
+            nickname.setNickname(displayLabel.label().trimmed());
             simContact.saveDetail(&nickname);
 
             simContact.removeDetail(&displayLabel);
 
             QContactSyncTarget syncTarget = simContact.detail<QContactSyncTarget>();
-            syncTarget.setSyncTarget(m_syncTarget);
+            syncTarget.setSyncTarget(m_simSyncTarget);
             simContact.saveDetail(&syncTarget);
 
             importContacts.append(simContact);
@@ -339,10 +302,12 @@ void CDSimController::ensureSimContactsPresent()
     }
 
     if (!importContacts.isEmpty()) {
-        // Import any contacts not currently present
-        m_saveRequest.setContacts(importContacts);
-        m_saveRequest.start();
+        // Import any contacts which were modified or are not currently present
+        if (!m_manager.saveContacts(&importContacts)) {
+            qWarning() << "Error while saving imported sim contacts";
+        }
     }
+
 
     if (!existingContacts.isEmpty()) {
         // Remove any imported contacts no longer on the SIM
@@ -351,11 +316,10 @@ void CDSimController::ensureSimContactsPresent()
             obsoleteIds.append(contact.id());
         }
 
-        m_removeRequest.setContactIds(obsoleteIds);
-        m_removeRequest.start();
+        if (!m_manager.removeContacts(obsoleteIds)) {
+            qWarning() << "Error while removing obsolete sim contacts";
+        }
     }
-
-    setBusy(!importContacts.isEmpty() || !existingContacts.isEmpty());
 }
 
 void CDSimController::voicemailConfigurationChanged()
