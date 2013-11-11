@@ -20,10 +20,7 @@
 
 #include <QContactManager>
 #include <QContact>
-#include <QContactIdFetchRequest>
-#include <QContactFetchByIdRequest>
-#include <QContactSaveRequest>
-#include <QContactRemoveRequest>
+#include <QContactDetailFilter>
 
 #include <QVersitReader>
 
@@ -45,12 +42,11 @@ class CDSimController : public QObject
     Q_OBJECT
 
 public:
-    explicit CDSimController(QObject *parent = 0);
+    explicit CDSimController(QObject *parent = 0, const QString &syncTarget = QString::fromLatin1("sim"));
     ~CDSimController();
 
     QContactManager &contactManager();
 
-    void setSyncTarget(const QString &syncTarget);
     void setModemPath(const QString &path);
 
     bool busy() const;
@@ -63,9 +59,6 @@ public Q_SLOTS:
     void vcardDataAvailable(const QString &vcardData);
     void vcardReadFailed();
     void readerStateChanged(QVersitReader::State state);
-    void contactIdsAvailable();
-    void requestStateChanged(QContactAbstractRequest::State state);
-    void contactsAvailable();
     void voicemailConfigurationChanged();
 
 private:
@@ -73,26 +66,20 @@ private:
     void removeAllSimContacts();
     void ensureSimContactsPresent();
     void updateVoicemailConfiguration();
+    QContactDetailFilter simSyncTargetFilter() const;
 
 private:
     QContactManager m_manager;
-    QContactIdFetchRequest m_fetchIdsRequest;
-    QContactFetchByIdRequest m_fetchRequest;
-    QContactSaveRequest m_saveRequest;
-    QContactRemoveRequest m_removeRequest;
-
     QVersitReader m_contactReader;
 
     QOfonoSimManager m_simManager;
     bool m_simPresent;
 
-    QString m_syncTarget;
+    QString m_simSyncTarget;
     QString m_modemPath;
     QOfonoPhonebook m_phonebook;
     QOfonoMessageWaiting m_messageWaiting;
 
-    QSet<QContactId> m_contactIds;
-    QList<QContact> m_contacts;
     QList<QContact> m_simContacts;
     bool m_busy;
 

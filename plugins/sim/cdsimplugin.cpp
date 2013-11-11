@@ -36,8 +36,6 @@ void CDSimPlugin::init()
 
     mController = new CDSimController(this);
 
-    mController->setSyncTarget(QStringLiteral("sim"));
-
     QOfonoManager ofonoManager;
     const QStringList &modems(ofonoManager.modems());
     if (modems.isEmpty()) {
