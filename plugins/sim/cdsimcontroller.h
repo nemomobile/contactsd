@@ -67,12 +67,14 @@ public Q_SLOTS:
     void requestStateChanged(QContactAbstractRequest::State state);
     void contactsAvailable();
     void voicemailConfigurationChanged();
+    void transientImportConfigurationChanged();
 
 private:
     void setBusy(bool busy);
     void removeAllSimContacts();
     void ensureSimContactsPresent();
     void updateVoicemailConfiguration();
+    void performTransientImport();
 
 private:
     QContactManager m_manager;
@@ -85,6 +87,7 @@ private:
 
     QOfonoSimManager m_simManager;
     bool m_simPresent;
+    bool m_transientImport;
 
     QString m_syncTarget;
     QString m_modemPath;
@@ -97,6 +100,7 @@ private:
     bool m_busy;
 
     MGConfItem *m_voicemailConf;
+    MGConfItem *m_transientImportConf;
 };
 
 #endif // CDSIMCONTROLLER_H

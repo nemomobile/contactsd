@@ -31,9 +31,14 @@ CDSimController::CDSimController(QObject *parent)
     // Temporary override until qtpim supports QTCONTACTS_MANAGER_OVERRIDE
     , m_manager(QStringLiteral("org.nemomobile.contacts.sqlite"))
     , m_simPresent(false)
+    , m_transientImport(true)
     , m_busy(false)
     , m_voicemailConf(0)
+    , m_transientImportConf(new MGConfItem(QString::fromLatin1("/desktop/nemo/contacts/sim/transient_import"), this))
 {
+    m_transientImport = m_transientImportConf->value(QVariant::fromValue<QString>(QString::fromLatin1("true"))).toString() == QString::fromLatin1("true");
+    connect(m_transientImportConf, SIGNAL(valueChanged()), this, SLOT(transientImportConfigurationChanged()));
+
     m_fetchIdsRequest.setManager(&m_manager);
     m_fetchRequest.setManager(&m_manager);
     m_saveRequest.setManager(&m_manager);
@@ -121,36 +126,50 @@ void CDSimController::setBusy(bool busy)
     }
 }
 
+void CDSimController::performTransientImport()
+{
+    if (m_syncTarget.isEmpty()) {
+        qWarning() << "No sync target is configured";
+        return;
+    }
+
+    if (m_simPresent && m_transientImport) {
+        if (m_modemPath.isEmpty()) {
+            qWarning() << "No modem path is configured";
+        } else {
+            // Read all contacts from the SIM
+            m_phonebook.setModemPath(m_modemPath);
+            m_phonebook.beginImport();
+            setBusy(true);
+        }
+    } else {
+        // Find any contacts that we need to remove
+        if (!m_fetchIdsRequest.isActive()) {
+            m_contactIds.clear();
+            m_contacts.clear();
+            m_fetchIdsRequest.start();
+            setBusy(true);
+        }
+    }
+}
+
+void CDSimController::transientImportConfigurationChanged()
+{
+    bool transientImport = m_transientImportConf->value(QVariant::fromValue<QString>(QString::fromLatin1("true"))).toString() == QString::fromLatin1("true"); // true by default.
+    if (transientImport != m_transientImport) {
+        qDebug() << "Transient import setting changed:" << transientImport;
+        m_transientImport = transientImport;
+        performTransientImport();
+    }
+}
+
 void CDSimController::simPresenceChanged(bool present)
 {
     if (m_simPresent != present) {
         qDebug() << "SIM presence changed:" << present;
         m_simPresent = present;
-
         updateVoicemailConfiguration();
-
-        if (m_syncTarget.isEmpty()) {
-            qWarning() << "No sync target is configured";
-        } else {
-            if (m_simPresent) {
-                if (m_modemPath.isEmpty()) {
-                    qWarning() << "No modem path is configured";
-                } else {
-                    // Read all contacts from the SIM
-                    m_phonebook.setModemPath(m_modemPath);
-                    m_phonebook.beginImport();
-                    setBusy(true);
-                }
-            } else {
-                // Find any contacts that we need to remove
-                if (!m_fetchIdsRequest.isActive()) {
-                    m_contactIds.clear();
-                    m_contacts.clear();
-                    m_fetchIdsRequest.start();
-                    setBusy(true);
-                }
-            }
-        }
+        performTransientImport();
     }
 }
 
