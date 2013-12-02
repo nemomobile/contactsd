@@ -16,6 +16,7 @@
 #include "cdsimcontroller.h"
 #include "cdsimplugin.h"
 #include "debug.h"
+#include "util.h"
 
 #include <QContactDetailFilter>
 #include <QContactNickname>
@@ -65,9 +66,9 @@ CDSimController::CDSimController(QObject *parent)
     connect(&m_fetchIdsRequest, SIGNAL(stateChanged(QContactAbstractRequest::State)),
             this, SLOT(requestStateChanged(QContactAbstractRequest::State)));
 
-    // Fetch only the nickname and phone details for imported contacts
+    // Fetch only the name, nickname and phone details for imported contacts
     QContactFetchHint hint;
-    hint.setDetailTypesHint(QList<QContactDetail::DetailType>() << QContactNickname::Type << QContactPhoneNumber::Type);
+    hint.setDetailTypesHint(QList<QContactDetail::DetailType>() << QContactName::Type << QContactNickname::Type << QContactPhoneNumber::Type);
     hint.setOptimizationHints(QContactFetchHint::NoRelationships | QContactFetchHint::NoActionPreferences | QContactFetchHint::NoBinaryBlobs);
     m_fetchRequest.setFetchHint(hint);
 
@@ -387,7 +388,12 @@ void CDSimController::ensureSimContactsPresent()
         } else {
             // We need to import this contact
 
-            // Convert the display label to a nickname; display label is managed by the backend
+            // Convert the display label to a name, and store the imported
+            // display label as the nickname; display label is managed by the backend
+            QContactName name = simContact.detail<QContactName>();
+            Util::decomposeNameDetails(displayLabel.label().trimmed(), &name);
+            simContact.saveDetail(&name);
+
             QContactNickname nickname = simContact.detail<QContactNickname>();
             nickname.setNickname(displayLabel.label().trimmed());
             simContact.saveDetail(&nickname);

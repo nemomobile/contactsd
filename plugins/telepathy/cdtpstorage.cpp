@@ -62,6 +62,7 @@
 #include "cdtpavatarupdate.h"
 #include "cdtpplugin.h"
 #include "debug.h"
+#include "util.h"
 
 #include <QElapsedTimer>
 
@@ -1055,16 +1056,6 @@ const QString &protocolType(const QString &protocol)
 #endif
 
 template<typename F1, typename F2>
-void updateNameDetail(F1 getter, F2 setter, QContactName *nameDetail, const QString &value)
-{
-    QString existing((nameDetail->*getter)());
-    if (!existing.isEmpty()) {
-        existing.append(QChar::fromLatin1(' '));
-    }
-    (nameDetail->*setter)(existing + value);
-}
-
-template<typename F1, typename F2>
 void replaceNameDetail(F1 getter, F2 setter, QContactName *nameDetail, const QString &value)
 {
     if (!value.isEmpty()) {
@@ -1078,56 +1069,7 @@ void replaceNameDetail(F1 getter, F2 setter, QContactName *nameDetail, const QSt
     }
 }
 
-void decomposeNameDetails(const QString &formattedName, QContactName *nameDetail)
-{
-    // Try to parse the structure from the formatted name
-    // TODO: Use MBreakIterator for localized splitting
-    QStringList tokens(formattedName.split(QChar::fromLatin1(' '), QString::SkipEmptyParts));
-    if (tokens.count() >= 2) {
-        QString format;
-        if (tokens.count() == 2) {
-            //: Format string for allocating 2 tokens to name parts - 2 characters from the set [FMLPS]
-            //% "FL"
-            format = qtTrId("qtn_name_structure_2_tokens");
-        } else if (tokens.count() == 3) {
-            //: Format string for allocating 3 tokens to name parts - 3 characters from the set [FMLPS]
-            //% "FML"
-            format = qtTrId("qtn_name_structure_3_tokens");
-        } else if (tokens.count() > 3) {
-            //: Format string for allocating 4 tokens to name parts - 4 characters from the set [FMLPS]
-            //% "FFML"
-            format = qtTrId("qtn_name_structure_4_tokens");
 
-            // Coalesce the leading tokens together to limit the possibilities
-            int excess = tokens.count() - 4;
-            if (excess > 0) {
-                QString first(tokens.takeFirst());
-                while (--excess >= 0) {
-                    // TODO: local-specific join?
-                    first += QChar::fromLatin1(' ') + tokens.takeFirst();
-                }
-                tokens.prepend(first);
-            }
-        }
-
-        if (format.length() != tokens.length()) {
-            qWarning() << "Invalid structure format for" << tokens.count() << "tokens:" << format;
-        } else {
-            foreach (const QChar &part, format) {
-                const QString token(tokens.takeFirst());
-                switch (part.toUpper().toLatin1()) {
-                    case 'F': updateNameDetail(&QContactName::firstName, &QContactName::setFirstName, nameDetail, token); break;
-                    case 'M': updateNameDetail(&QContactName::middleName, &QContactName::setMiddleName, nameDetail, token); break;
-                    case 'L': updateNameDetail(&QContactName::lastName, &QContactName::setLastName, nameDetail, token); break;
-                    case 'P': updateNameDetail(&QContactName::prefix, &QContactName::setPrefix, nameDetail, token); break;
-                    case 'S': updateNameDetail(&QContactName::suffix, &QContactName::setSuffix, nameDetail, token); break;
-                    default:
-                        qWarning() << "Invalid structure format character:" << part;
-                }
-            }
-        }
-    }
-}
 
 template<typename T, typename F>
 bool detailListsDiffer(const QList<T> &lhs, const QList<T> &rhs, F detailsDiffer)
@@ -1474,7 +1416,7 @@ CDTpContact::Changes updateContactDetails(QNetworkAccessManager &network, QConta
 
                 if (structuredName || !formattedName.isEmpty()) {
                     if (!structuredName) {
-                        decomposeNameDetails(formattedName, &nameDetail);
+                        Util::decomposeNameDetails(formattedName, &nameDetail);
                     }
 
                     if (!formattedName.isEmpty()) {
@@ -1870,7 +1812,7 @@ bool CDTpStorage::initializeNewContact(QContact &newContact, CDTpAccountPtr acco
     if (!alias.isEmpty()) {
         QContactName name;
 
-        decomposeNameDetails(alias, &name);
+        Util::decomposeNameDetails(alias, &name);
 
 #ifdef USING_QTPIM
         name.setValue(QContactName__FieldCustomLabel, alias);

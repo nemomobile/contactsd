@@ -43,6 +43,7 @@ HEADERS += test-contactsd.h \
     $$TOP_SOURCEDIR/src/contactsdpluginloader.h \
     $$TOP_SOURCEDIR/src/importstate.h \
     $$TOP_SOURCEDIR/src/debug.h \
+    $$TOP_SOURCEDIR/src/util.h \
     $$TOP_SOURCEDIR/src/base-plugin.h
 
 SOURCES += test-contactsd.cpp \
@@ -50,6 +51,7 @@ SOURCES += test-contactsd.cpp \
     $$TOP_SOURCEDIR/src/contactsdpluginloader.cpp \
     $$TOP_SOURCEDIR/src/importstate.cpp \
     $$TOP_SOURCEDIR/src/debug.cpp \
+    $$TOP_SOURCEDIR/src/util.cpp \
     $$TOP_SOURCEDIR/src/base-plugin.cpp
 
 DEFINES += CONTACTSD_PLUGINS_DIR=\\\"$$LIBDIR/$${PACKAGENAME}-1.0/plugins\\\"

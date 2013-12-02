@@ -56,13 +56,17 @@ QMAKE_CXXFLAGS += -c -g --coverage -ftest-coverage -fprofile-arcs
 LIBS += -lgcov
 }
 
-HEADERS += debug.h \
+HEADERS += \
+    $$TOP_SOURCEDIR/src/util.h \
+    debug.h \
     test-telepathy-plugin.h \
     test-expectation.h \
     test.h \
     buddymanagementinterface.h
 
-SOURCES += debug.cpp \
+SOURCES += \
+    $$TOP_SOURCEDIR/src/util.cpp \
+    debug.cpp \
     test-telepathy-plugin.cpp \
     test-expectation.cpp \
     test.cpp \
