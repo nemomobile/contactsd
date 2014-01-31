@@ -38,6 +38,8 @@ TRANSLATIONS_INSTALL_PATH = "/usr/share/translations"
 DEFINES += TRANSLATIONS_INSTALL_PATH=\"\\\"\"$${TRANSLATIONS_INSTALL_PATH}\"\\\"\"
 
 CONFIG += link_pkgconfig
+PKGCONFIG += Qt5Contacts
+DEFINES *= USING_QTPIM
 packagesExist(qt5-boostable) {
     DEFINES += HAS_BOOSTER
     PKGCONFIG += qt5-boostable
@@ -51,6 +53,7 @@ HEADERS += contactsd.h \
     importstateconst.h \
     contactsimportprogressadaptor.h \
     debug.h \
+    util.h \
     base-plugin.h
 
 SOURCES += main.cpp \
@@ -59,6 +62,7 @@ SOURCES += main.cpp \
     importstate.cpp \
     contactsimportprogressadaptor.cpp \
     debug.cpp \
+    util.cpp \
     base-plugin.cpp
 
 DEFINES += VERSION=\\\"$${VERSION}\\\"
@@ -67,6 +71,7 @@ DEFINES += CONTACTSD_PLUGINS_DIR=\\\"$$LIBDIR/$${VERSIONED_TARGET}/plugins\\\"
 
 headers.files = BasePlugin base-plugin.h \
     Debug debug.h \
+    Util util.h \
     ImportStateConst importstateconst.h
 headers.path = $$INCLUDEDIR/$${VERSIONED_TARGET}/Contactsd
 
