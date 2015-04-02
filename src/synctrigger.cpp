@@ -30,16 +30,38 @@
 #include <SyncCommonDefs.h>
 #include <ProfileManager.h>
 
+// QtContacts
+#include <QContactManager>
+#include <QContactId>
+#include <QContactDetail>
+
+namespace{
+    QContactManager *createManager()
+    {
+        QMap<QString, QString> parameters;
+        parameters.insert(QString::fromLatin1("mergePresenceChanges"), QString::fromLatin1("false"));
+        return new QContactManager(QString::fromLatin1("org.nemomobile.contacts.sqlite"), parameters);
+    }
+}
+
 namespace Contactsd {
 
 SyncTrigger::SyncTrigger(QDBusConnection *connection)
-    : mDBusConnection(connection)
+    : mContactManager(createManager())
+    , mDBusConnection(connection)
     , mHaveRegisteredDBus(false)
 {
+    QObject::connect(mContactManager, &QContactManager::contactsAdded, this, &SyncTrigger::contactDbChangesDetected);
+    QObject::connect(mContactManager, &QContactManager::contactsChanged, this, &SyncTrigger::contactDbChangesDetected);
+    QObject::connect(mContactManager, &QContactManager::contactsRemoved, this, &SyncTrigger::contactDbChangesDetected);
+
+    mTimer.setInterval(60000); // coalesce local changes within 1 minute
+    QObject::connect(&mTimer, &QTimer::timeout, this, &SyncTrigger::coalescedTrigger);
 }
 
 SyncTrigger::~SyncTrigger()
 {
+    delete mContactManager;
     if (mHaveRegisteredDBus) {
         mDBusConnection->unregisterObject(QLatin1String("/SyncTrigger"));
     }
@@ -111,6 +133,7 @@ void SyncTrigger::triggerSync(const QStringList &syncTargets, int syncPolicy, in
         if (notTemplate && isEnabled && isTarget && isContacts
                 && (isUpsync || directionPolicy == SyncTrigger::AnyDirection)
                 && (alwaysUpToDate || syncPolicy == SyncTrigger::ForceSync)) {
+            debug() << "sync profile meets trigger criteria, starting sync:" << profileId;
             QDBusMessage message = QDBusMessage::createMethodCall(
                     QStringLiteral("com.meego.msyncd"),
                     QStringLiteral("/synchronizer"),
@@ -135,6 +158,25 @@ void SyncTrigger::triggerSync(const QStringList &syncTargets, int syncPolicy, in
         message.setArguments(QVariantList() << dataType);
         QDBusConnection::sessionBus().asyncCall(message);
     }
+}
+
+void SyncTrigger::contactDbChangesDetected()
+{
+    if (mTimer.isActive()) {
+        // reset the timer to coalesce detected changes into single sync cycle.
+        debug() << "coalescing previously detected change into new change before triggering sync";
+        mTimer.stop();
+    } else {
+        debug() << "detected change, beginning coalesce timer to trigger sync";
+    }
+
+    mTimer.start();
+}
+
+void SyncTrigger::coalescedTrigger()
+{
+    debug() << "contact database changes detected, triggering upsyncs";
+    triggerSync(QStringList(), SyncTrigger::UpToDateSync, SyncTrigger::UpsyncDirection);
 }
 
 }
