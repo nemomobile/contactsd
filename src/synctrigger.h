@@ -24,6 +24,10 @@
 #include <QDBusConnection>
 #include <QObject>
 #include <QStringList>
+#include <QTimer>
+
+#include <QContactManager>
+QTCONTACTS_USE_NAMESPACE
 
 namespace Contactsd {
 
@@ -51,7 +55,13 @@ public:
 public Q_SLOTS:
     Q_NOREPLY void triggerSync(const QStringList &syncTargets = QStringList(), int syncPolicy = ForceSync, int directionPolicy = AnyDirection);
 
+private Q_SLOTS:
+    void contactDbChangesDetected();
+    void coalescedTrigger();
+
 private:
+    QTimer mTimer;
+    QContactManager *mContactManager;
     QDBusConnection *mDBusConnection;
     bool mHaveRegisteredDBus;
 };
