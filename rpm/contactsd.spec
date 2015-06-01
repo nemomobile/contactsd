@@ -107,13 +107,10 @@ ln -s ../contactsd.service %{buildroot}%{_libdir}/systemd/user/post-user-session
 
 %post
 if [ "$1" -ge 1 ]; then
-systemctl-user daemon-reload || :
-systemctl-user restart contactsd.service || :
+echo "if you manually installed the package, you should invoke 'systemctl --user daemon-reload' and then 'systemctl --user restart contactsd'" || :
 fi
 
 %postun
 if [ "$1" -eq 0 ]; then
-systemctl-user stop contactsd.service || :
-systemctl-user daemon-reload || :
+echo "if you manually uninstalled the package, you should invoke 'systemctl --user stop contactsd' and then 'systemctl --user daemon-reload'" || :
 fi
-
