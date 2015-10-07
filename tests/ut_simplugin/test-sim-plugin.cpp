@@ -19,6 +19,7 @@
 
 #include <QContactDetailFilter>
 #include <QContactNickname>
+#include <QContactOriginMetadata>
 #include <QContactPhoneNumber>
 #include <QContactSyncTarget>
 
@@ -33,6 +34,21 @@ QList<QContact> getAllSimContacts(const QContactManager &m)
     stFilter.setValue(QStringLiteral("sim-test"));
 
     return m.contacts(stFilter);
+}
+
+QContact createTestContact()
+{
+    QContact rv;
+
+    QContactSyncTarget st;
+    st.setSyncTarget(QStringLiteral("sim-test"));
+    rv.saveDetail(&st);
+
+    QContactOriginMetadata md;
+    md.setGroupId(QStringLiteral("dummy-cardId"));
+    rv.saveDetail(&md);
+
+    return rv;
 }
 
 }
@@ -51,7 +67,8 @@ void TestSimPlugin::init()
 
 void TestSimPlugin::initTestCase()
 {
-    m_controller = new CDSimController(this, QStringLiteral("sim-test"));
+    m_controller = new CDSimController(this, QStringLiteral("sim-test"), false);
+    m_controller->setModemPaths(QStringList() << "dummy-cardId");
 }
 
 void TestSimPlugin::testAdd()
@@ -62,13 +79,13 @@ void TestSimPlugin::testAdd()
     QCOMPARE(m_controller->busy(), false);
 
     // We don't have a modem path configured, so the controller can't query the SIM
-    m_controller->simPresenceChanged(true);
+    m_controller->m_modems.first()->setReady(true);
     QCOMPARE(m_controller->busy(), false);
 
     // Normally, a sim-present notification would cause the controller to fetch
     // VCard data from the SIM. Instead, we bypass the first part here, and supply
     // the VCard data directly
-    m_controller->vcardDataAvailable(QStringLiteral(
+    m_controller->m_modems.first()->vcardDataAvailable(QStringLiteral(
 "BEGIN:VCARD\n"
 "VERSION:3.0\n"
 "FN:Forrest Gump\n"
@@ -91,15 +108,11 @@ void TestSimPlugin::testAppend()
     QContactManager &m(m_controller->contactManager());
 
     // Add the Forrest Gump contact manually
-    QContact forrest;
+    QContact forrest(createTestContact());
 
     QContactNickname n;
     n.setNickname("Forrest Gump");
     forrest.saveDetail(&n);
-
-    QContactSyncTarget st;
-    st.setSyncTarget(QStringLiteral("sim-test"));
-    forrest.saveDetail(&st);
 
     QVERIFY(m.saveContact(&forrest));
 
@@ -107,8 +120,8 @@ void TestSimPlugin::testAppend()
     QCOMPARE(m_controller->busy(), false);
 
     // Process a VCard set containing Forrest Gump and another contact
-    m_controller->simPresenceChanged(true);
-    m_controller->vcardDataAvailable(QStringLiteral(
+    m_controller->m_modems.first()->setReady(true);
+    m_controller->m_modems.first()->vcardDataAvailable(QStringLiteral(
 "BEGIN:VCARD\n"
 "VERSION:3.0\n"
 "FN:Forrest Gump\n"
@@ -133,23 +146,16 @@ void TestSimPlugin::testRemove()
     QContactManager &m(m_controller->contactManager());
 
     // Add two contacts manually
-    QContact gump;
+    QContact gump(createTestContact());
 
     QContactNickname n;
     n.setNickname("Forrest Gump");
     gump.saveDetail(&n);
 
-    QContactSyncTarget st;
-    st.setSyncTarget(QStringLiteral("sim-test"));
-    gump.saveDetail(&st);
-
-    QContact whittaker;
+    QContact whittaker(createTestContact());
 
     n.setNickname("Forrest Whittaker");
     whittaker.saveDetail(&n);
-
-    st.setSyncTarget(QStringLiteral("sim-test"));
-    whittaker.saveDetail(&st);
 
     QVERIFY(m.saveContact(&gump));
     QVERIFY(m.saveContact(&whittaker));
@@ -158,8 +164,8 @@ void TestSimPlugin::testRemove()
     QCOMPARE(m_controller->busy(), false);
 
     // Process a VCard set containing only Forrest Whittaker
-    m_controller->simPresenceChanged(true);
-    m_controller->vcardDataAvailable(QStringLiteral(
+    m_controller->m_modems.first()->setReady(true);
+    m_controller->m_modems.first()->vcardDataAvailable(QStringLiteral(
 "BEGIN:VCARD\n"
 "VERSION:3.0\n"
 "FN:Forrest Whittaker\n"
@@ -178,15 +184,11 @@ void TestSimPlugin::testAddAndRemove()
     QContactManager &m(m_controller->contactManager());
 
     // Add the Forrest Gump contact manually
-    QContact forrest;
+    QContact forrest(createTestContact());
 
     QContactNickname n;
     n.setNickname("Forrest Gump");
     forrest.saveDetail(&n);
-
-    QContactSyncTarget st;
-    st.setSyncTarget(QStringLiteral("sim-test"));
-    forrest.saveDetail(&st);
 
     QVERIFY(m.saveContact(&forrest));
 
@@ -194,8 +196,8 @@ void TestSimPlugin::testAddAndRemove()
     QCOMPARE(m_controller->busy(), false);
 
     // Process a VCard set not containing Forrest Gump but another contact
-    m_controller->simPresenceChanged(true);
-    m_controller->vcardDataAvailable(QStringLiteral(
+    m_controller->m_modems.first()->setReady(true);
+    m_controller->m_modems.first()->vcardDataAvailable(QStringLiteral(
 "BEGIN:VCARD\n"
 "VERSION:3.0\n"
 "FN:Forrest Whittaker\n"
@@ -216,10 +218,10 @@ void TestSimPlugin::testChangedNumber()
     QCOMPARE(getAllSimContacts(m).count(), 0);
     QCOMPARE(m_controller->busy(), false);
 
-    m_controller->simPresenceChanged(true);
+    m_controller->m_modems.first()->setReady(true);
     QCOMPARE(m_controller->busy(), false);
 
-    m_controller->vcardDataAvailable(QStringLiteral(
+    m_controller->m_modems.first()->vcardDataAvailable(QStringLiteral(
 "BEGIN:VCARD\n"
 "VERSION:3.0\n"
 "FN:Forrest Gump\n"
@@ -238,7 +240,7 @@ void TestSimPlugin::testChangedNumber()
     QContactId existingId = simContacts.at(0).id();
 
     // Change the number and verify that it is updated in the database, but the contact was not recreated
-    m_controller->vcardDataAvailable(QStringLiteral(
+    m_controller->m_modems.first()->vcardDataAvailable(QStringLiteral(
 "BEGIN:VCARD\n"
 "VERSION:3.0\n"
 "FN:Forrest Gump\n"
@@ -256,7 +258,7 @@ void TestSimPlugin::testChangedNumber()
     QVERIFY(simContacts.at(0).detail<QContactPhoneNumber>().subTypes().contains(QContactPhoneNumber::SubTypeVideo));
 
     // Change the context and verify that it is updated in the database
-    m_controller->vcardDataAvailable(QStringLiteral(
+    m_controller->m_modems.first()->vcardDataAvailable(QStringLiteral(
 "BEGIN:VCARD\n"
 "VERSION:3.0\n"
 "FN:Forrest Gump\n"
@@ -274,7 +276,7 @@ void TestSimPlugin::testChangedNumber()
     QVERIFY(simContacts.at(0).detail<QContactPhoneNumber>().subTypes().contains(QContactPhoneNumber::SubTypeVideo));
 
     // Change the subtype and verify that it is updated in the database
-    m_controller->vcardDataAvailable(QStringLiteral(
+    m_controller->m_modems.first()->vcardDataAvailable(QStringLiteral(
 "BEGIN:VCARD\n"
 "VERSION:3.0\n"
 "FN:Forrest Gump\n"
@@ -300,11 +302,11 @@ void TestSimPlugin::testMultipleNumbers()
     QCOMPARE(getAllSimContacts(m).count(), 0);
     QCOMPARE(m_controller->busy(), false);
 
-    m_controller->simPresenceChanged(true);
+    m_controller->m_modems.first()->setReady(true);
     QCOMPARE(m_controller->busy(), false);
 
     // Add a contact with two numbers
-    m_controller->vcardDataAvailable(QStringLiteral(
+    m_controller->m_modems.first()->vcardDataAvailable(QStringLiteral(
 "BEGIN:VCARD\n"
 "VERSION:3.0\n"
 "FN:Forrest Gump\n"
@@ -332,7 +334,7 @@ void TestSimPlugin::testMultipleNumbers()
     QContactId existingId = simContacts.at(0).id();
 
     // Change the set of numbers
-    m_controller->vcardDataAvailable(QStringLiteral(
+    m_controller->m_modems.first()->vcardDataAvailable(QStringLiteral(
 "BEGIN:VCARD\n"
 "VERSION:3.0\n"
 "FN:Forrest Gump\n"
@@ -371,11 +373,11 @@ void TestSimPlugin::testMultipleIdenticalNumbers()
     QCOMPARE(getAllSimContacts(m).count(), 0);
     QCOMPARE(m_controller->busy(), false);
 
-    m_controller->simPresenceChanged(true);
+    m_controller->m_modems.first()->setReady(true);
     QCOMPARE(m_controller->busy(), false);
 
     // Add a contact with two very similar numbers
-    m_controller->vcardDataAvailable(QStringLiteral(
+    m_controller->m_modems.first()->vcardDataAvailable(QStringLiteral(
 "BEGIN:VCARD\n"
 "VERSION:3.0\n"
 "FN:Forrest Gump\n"
@@ -403,7 +405,7 @@ void TestSimPlugin::testMultipleIdenticalNumbers()
     QContactId existingId = simContacts.at(0).id();
 
     // Modify contact so that the number is now identical
-    m_controller->vcardDataAvailable(QStringLiteral(
+    m_controller->m_modems.first()->vcardDataAvailable(QStringLiteral(
 "BEGIN:VCARD\n"
 "VERSION:3.0\n"
 "FN:Forrest Gump\n"
@@ -432,11 +434,11 @@ void TestSimPlugin::testTrimWhitespace()
     QCOMPARE(getAllSimContacts(m).count(), 0);
     QCOMPARE(m_controller->busy(), false);
 
-    m_controller->simPresenceChanged(true);
+    m_controller->m_modems.first()->setReady(true);
     QCOMPARE(m_controller->busy(), false);
 
     // Add a contact with two numbers
-    m_controller->vcardDataAvailable(QStringLiteral(
+    m_controller->m_modems.first()->vcardDataAvailable(QStringLiteral(
 "BEGIN:VCARD\n"
 "VERSION:3.0\n"
 "FN:Forrest Gump\n"
@@ -464,7 +466,7 @@ void TestSimPlugin::testTrimWhitespace()
     QContactId existingId = simContacts.at(0).id();
 
     // Add another contact with identical + whitespace name, changed number
-    m_controller->vcardDataAvailable(QStringLiteral(
+    m_controller->m_modems.first()->vcardDataAvailable(QStringLiteral(
 "BEGIN:VCARD\n"
 "VERSION:3.0\n"
 "FN:Forrest Gump \n"
@@ -499,11 +501,11 @@ void TestSimPlugin::testCoalescing()
     QCOMPARE(getAllSimContacts(m).count(), 0);
     QCOMPARE(m_controller->busy(), false);
 
-    m_controller->simPresenceChanged(true);
+    m_controller->m_modems.first()->setReady(true);
     QCOMPARE(m_controller->busy(), false);
 
     // Add the same contact a bunch of times
-    m_controller->vcardDataAvailable(QStringLiteral(
+    m_controller->m_modems.first()->vcardDataAvailable(QStringLiteral(
 "BEGIN:VCARD\n"
 "VERSION:3.0\n"
 "FN:Forrest Gump\n"
@@ -547,15 +549,11 @@ void TestSimPlugin::testEmpty()
     QContactManager &m(m_controller->contactManager());
 
     // Add the Forrest Gump contact manually
-    QContact forrest;
+    QContact forrest(createTestContact());
 
     QContactNickname n;
     n.setNickname("Forrest Gump");
     forrest.saveDetail(&n);
-
-    QContactSyncTarget st;
-    st.setSyncTarget(QStringLiteral("sim-test"));
-    forrest.saveDetail(&st);
 
     QVERIFY(m.saveContact(&forrest));
 
@@ -563,8 +561,8 @@ void TestSimPlugin::testEmpty()
     QCOMPARE(m_controller->busy(), false);
 
     // Process an empty VCard
-    m_controller->simPresenceChanged(true);
-    m_controller->vcardDataAvailable(QString());
+    m_controller->m_modems.first()->setReady(true);
+    m_controller->m_modems.first()->vcardDataAvailable(QString());
     QCOMPARE(m_controller->busy(), true);
 
     QTRY_VERIFY(m_controller->busy() == false);
@@ -577,36 +575,27 @@ void TestSimPlugin::testEmpty()
 void TestSimPlugin::testClear()
 {
     QContactManager &m(m_controller->contactManager());
-    // Notify about fake presence of the Phonebook interface
-    m_controller->m_phonebook.onModemInterfacesChanged(QStringList(QString::fromLatin1("org.ofono.Phonebook")));
 
     // Add two contacts manually
-    QContact gump;
+    QContact gump(createTestContact());
 
     QContactNickname n;
     n.setNickname("Forrest Gump");
     gump.saveDetail(&n);
 
-    QContactSyncTarget st;
-    st.setSyncTarget(QStringLiteral("sim-test"));
-    gump.saveDetail(&st);
-
-    QContact whittaker;
+    QContact whittaker(createTestContact());
 
     n.setNickname("Forrest Whittaker");
     whittaker.saveDetail(&n);
-
-    st.setSyncTarget(QStringLiteral("sim-test"));
-    whittaker.saveDetail(&st);
 
     QVERIFY(m.saveContact(&gump));
     QVERIFY(m.saveContact(&whittaker));
 
     QCOMPARE(getAllSimContacts(m).count(), 2);
-    QCOMPARE(m_controller->busy(), true);
+    QCOMPARE(m_controller->busy(), false);
 
-    // Report the phonebook unavailability (happens when SIM card gets removed)
-    m_controller->m_phonebook.onModemInterfacesChanged(QStringList());
+    // Report the SIM card removed
+    m_controller->m_modems.first()->phonebookValidChanged(false);
     QTRY_VERIFY(m_controller->busy() == false);
 
     // All sim contacts should be removed

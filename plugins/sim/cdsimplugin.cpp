@@ -40,10 +40,7 @@ void CDSimPlugin::init()
     // NB: Expect this to happen asynchronously, as a result of receiving
     // defaultModemChanged signal.
     QOfonoManager* ofonoManager = new QOfonoManager(mController);
-    QString modemPath(ofonoManager->defaultModem());
-    if (!modemPath.isEmpty()) mController->setModemPath(modemPath);
-    connect(ofonoManager, SIGNAL(defaultModemChanged(QString)),
-        mController, SLOT(setModemPath(QString)));
+    connect(ofonoManager, SIGNAL(modemsChanged(QStringList)), mController, SLOT(setModemPaths(QStringList)));
 }
 
 CDSimPlugin::MetaData CDSimPlugin::metaData()

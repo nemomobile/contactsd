@@ -17,12 +17,16 @@
 #include "cdsimplugin.h"
 #include "debug.h"
 
-#include <QContactDetailFilter>
+#include <qtcontacts-extensions.h>
 #include <QContactDeactivated>
+#include <QContactOriginMetadata>
+#include <QContactStatusFlags>
+
+#include <QContactDetailFilter>
+#include <QContactIntersectionFilter>
 #include <QContactNickname>
 #include <QContactPhoneNumber>
 #include <QContactSyncTarget>
-#include <QContactStatusFlags>
 
 #include <QVersitContactImporter>
 
@@ -39,13 +43,113 @@ QMap<QString, QString> contactManagerParameters()
 
 }
 
-CDSimController::CDSimController(QObject *parent, const QString &syncTarget)
+CDSimModemData::CDSimModemData(CDSimController *controller, const QString &modemPath)
+    : QObject(controller)
+    , m_modemPath(modemPath)
+    , m_voicemailConf(0)
+    , m_ready(false)
+    , m_retries(0)
+{
+    connect(&m_simManager, SIGNAL(presenceChanged(bool)), SLOT(simStateChanged()));
+    connect(&m_simManager, SIGNAL(cardIdentifierChanged(QString)), SLOT(simStateChanged()));
+
+    connect(&m_phonebook, SIGNAL(importReady(QString)), SLOT(vcardDataAvailable(QString)));
+    connect(&m_phonebook, SIGNAL(importFailed()), SLOT(vcardReadFailed()));
+
+    // Resync the contacts list whenever the phonebook availability changes
+    connect(&m_phonebook, SIGNAL(validChanged(bool)), SLOT(phonebookValidChanged(bool)));
+
+    connect(&m_contactReader, SIGNAL(stateChanged(QVersitReader::State)), SLOT(readerStateChanged(QVersitReader::State)));
+
+    connect(&m_messageWaiting, SIGNAL(voicemailMailboxNumberChanged(QString)), SLOT(voicemailConfigurationChanged()));
+
+    // Don't activate ofono objects in test mode
+    if (controller->m_active) {
+        // Start reading the SIM contacts
+        m_simManager.setModemPath(m_modemPath);
+        m_simSettings.setModemPath(m_modemPath);
+        m_phonebook.setModemPath(m_modemPath);
+        m_messageWaiting.setModemPath(m_modemPath);
+    }
+}
+
+CDSimModemData::~CDSimModemData()
+{
+    delete m_voicemailConf;
+}
+
+CDSimController *CDSimModemData::controller() const
+{
+    return qobject_cast<CDSimController *>(parent());
+}
+
+QContactManager &CDSimModemData::manager() const
+{
+    return controller()->contactManager();
+}
+
+QString CDSimModemData::modemIdentifier() const
+{
+    if (controller()->m_active) {
+        return m_simManager.cardIdentifier();
+    }
+    // Test code:
+    return m_modemPath;
+}
+
+QContactFilter CDSimModemData::modemFilter(const QString &cardIdentifier) const
+{
+    QContactIntersectionFilter filter;
+    filter << controller()->simSyncTargetFilter();
+    filter << QContactOriginMetadata::matchGroupId(cardIdentifier);
+    return filter;
+}
+
+bool CDSimModemData::ready() const
+{
+    return m_ready;
+}
+
+void CDSimModemData::setReady(bool ready)
+{
+    if (m_ready != ready) {
+        m_ready = ready;
+        emit readyChanged(m_ready);
+
+        if (m_ready) {
+            updateVoicemailConfiguration();
+
+            if (m_phonebook.isValid()) {
+                performTransientImport();
+            }
+        }
+    }
+}
+
+void CDSimModemData::updateBusy()
+{
+    controller()->updateBusy();
+}
+
+void CDSimModemData::timerEvent(QTimerEvent *event)
+{
+    if (event->timerId() == m_retryTimer.timerId()) {
+        m_retryTimer.stop();
+
+        if (m_ready) {
+            performTransientImport();
+        }
+    }
+}
+
+
+CDSimController::CDSimController(QObject *parent, const QString &syncTarget, bool active)
     : QObject(parent)
     , m_manager(QStringLiteral("org.nemomobile.contacts.sqlite"), contactManagerParameters())
     , m_transientImport(true)
     , m_simSyncTarget(syncTarget)
     , m_busy(false)
-    , m_voicemailConf(0)
+    , m_active(active)
     , m_transientImportConf(QString::fromLatin1("/org/nemomobile/contacts/sim/transient_import"))
 {
     QVariant transientImport = m_transientImportConf.value();
@@ -53,24 +157,6 @@ CDSimController::CDSimController(QObject *parent, const QString &syncTarget)
         m_transientImport = (transientImport.toInt() == 1);
 
     connect(&m_transientImportConf, SIGNAL(valueChanged()), this, SLOT(transientImportConfigurationChanged()));
-
-    connect(&m_phonebook, SIGNAL(importReady(QString)),
-            this, SLOT(vcardDataAvailable(QString)));
-    connect(&m_phonebook, SIGNAL(importFailed()),
-            this, SLOT(vcardReadFailed()));
-
-    connect(&m_messageWaiting, SIGNAL(voicemailMailboxNumberChanged(QString)),
-            this, SLOT(voicemailConfigurationChanged()));
-
-    connect(&m_contactReader, SIGNAL(stateChanged(QVersitReader::State)),
-            this, SLOT(readerStateChanged(QVersitReader::State)));
-
-    // Resync the contacts list whenever the phonebook availability changes
-    connect(&m_phonebook, SIGNAL(validChanged(bool)),
-            this, SLOT(phoneBookAvailabilityChanged(bool)));
-
-    connect(&m_simManager, SIGNAL(presenceChanged(bool)),
-            this, SLOT(simPresenceChanged(bool)));
 }
 
 CDSimController::~CDSimController()
@@ -85,7 +171,7 @@ QContactDetailFilter CDSimController::simSyncTargetFilter() const
     return syncTargetFilter;
 }
 
-QContactFilter CDSimController::deactivatedFilter() const
+static QContactFilter deactivatedFilter()
 {
     return QContactStatusFlags::matchFlag(QContactStatusFlags::IsDeactivated, QContactFilter::MatchContains);
 }
@@ -95,12 +181,48 @@ QContactManager &CDSimController::contactManager()
     return m_manager;
 }
 
-void CDSimController::setModemPath(const QString &path)
+void CDSimController::setModemPaths(const QStringList &paths)
 {
-    qDebug() << "Using modem path:" << path;
-    m_phonebook.setModemPath(path);
-    m_messageWaiting.setModemPath(path);
-    m_simManager.setModemPath(path);
+    if (m_simSyncTarget.isEmpty()) {
+        qWarning() << "No sync target is configured";
+        return;
+    }
+
+    qWarning() << "Managing SIM contacts for modem paths:" << paths;
+    QMap<QString, CDSimModemData *>::iterator it = m_modems.begin();
+    while (it != m_modems.end()) {
+        if (paths.contains(it.key())) {
+            ++it;
+        } else {
+            // This modem is no longer active; remove it
+            delete it.value();
+            it = m_modems.erase(it);
+        }
+    }
+
+    QSet<QString> absentModemPaths;
+
+    foreach (const QString &path, paths) {
+        CDSimModemData *modemData = m_modems.value(path);
+        if (!modemData) {
+            modemData = new CDSimModemData(this, path);
+            connect(modemData, SIGNAL(readyChanged(bool)), SLOT(modemReadyChanged(bool)));
+            m_modems.insert(path, modemData);
+        }
+
+        if (!modemData->ready()) {
+            absentModemPaths.insert(path);
+        }
+    }
+
+    if (absentModemPaths.isEmpty()) {
+        // Remove any SIM contacts that don't originate from our current modems
+        removeObsoleteSimContacts();
+    } else {
+        // Check for obsolete contacts after all modems are ready
+        m_absentModemPaths = absentModemPaths;
+        m_readyTimer.start(30 * 1000, this);
+    }
 }
 
 bool CDSimController::busy() const
@@ -110,28 +232,47 @@ bool CDSimController::busy() const
 
 void CDSimController::updateBusy()
 {
-    bool busy = m_phonebook.importing() || m_contactReader.state() == QVersitReader::ActiveState;
+    bool busy = false;
+    QMap<QString, CDSimModemData *>::const_iterator mit = m_modems.constBegin(), mend = m_modems.constEnd();
+    for ( ; !busy && mit != mend; ++mit) {
+        busy |= ((*mit)->m_phonebook.importing() || (*mit)->m_contactReader.state() == QVersitReader::ActiveState);
+    }
+
     if (m_busy != busy) {
         m_busy = busy;
         emit busyChanged(m_busy);
     }
 }
 
-void CDSimController::performTransientImport()
+void CDSimController::timerEvent(QTimerEvent *event)
 {
-    if (m_simSyncTarget.isEmpty()) {
-        qWarning() << "No sync target is configured";
+    if (event->timerId() == m_readyTimer.timerId()) {
+        m_readyTimer.stop();
+
+        if (!m_absentModemPaths.isEmpty()) {
+            // Stop waiting for these modems to report presence
+            m_absentModemPaths.clear();
+            removeObsoleteSimContacts();
+        }
+    }
+}
+
+void CDSimModemData::performTransientImport()
+{
+    if (modemIdentifier().isEmpty()) {
+        qWarning() << "No identifier available for modem:" << m_simManager.modemPath();
         return;
     }
 
-    if (m_phonebook.isValid() && m_transientImport) {
+    if (m_phonebook.isValid() && controller()->m_transientImport) {
         // Read all contacts from the SIM
         m_phonebook.beginImport();
-        updateBusy();
     } else {
         m_simContacts.clear();
         deactivateAllSimContacts();
     }
+
+    updateBusy();
 }
 
 void CDSimController::transientImportConfigurationChanged()
@@ -144,44 +285,73 @@ void CDSimController::transientImportConfigurationChanged()
 
     if (m_transientImport != importEnabled) {
         m_transientImport = importEnabled;
+
+        QMap<QString, CDSimModemData *>::const_iterator mit = m_modems.constBegin(), mend = m_modems.constEnd();
+        for ( ; mit != mend; ++mit) {
+            (*mit)->performTransientImport();
+        }
+    }
+}
+
+void CDSimController::modemReadyChanged(bool ready)
+{
+    CDSimModemData *modem = qobject_cast<CDSimModemData *>(sender());
+    if (ready && m_absentModemPaths.contains(modem->m_simManager.modemPath())) {
+        m_absentModemPaths.remove(modem->m_simManager.modemPath());
+        if (m_absentModemPaths.isEmpty()) {
+            m_readyTimer.stop();
+
+            // Remove any SIM contacts that don't originate from our current modems
+            removeObsoleteSimContacts();
+        }
+    }
+}
+
+void CDSimModemData::simStateChanged()
+{
+    setReady(m_simManager.present() && !m_simManager.cardIdentifier().isEmpty());
+}
+
+void CDSimModemData::phonebookValidChanged(bool)
+{
+    if (m_ready) {
         performTransientImport();
     }
 }
 
-void CDSimController::simPresenceChanged(bool)
-{
-    updateVoicemailConfiguration();
-}
-
-void CDSimController::phoneBookAvailabilityChanged(bool available)
-{
-    performTransientImport();
-    updateBusy();
-}
-
-void CDSimController::vcardDataAvailable(const QString &vcardData)
+void CDSimModemData::vcardDataAvailable(const QString &vcardData)
 {
     // Create contact records from the SIM VCard data
     m_simContacts.clear();
     m_contactReader.setData(vcardData.toUtf8());
     m_contactReader.startReading();
     updateBusy();
+
+    m_retries = 0;
 }
 
-void CDSimController::vcardReadFailed()
+void CDSimModemData::vcardReadFailed()
 {
     qWarning() << "Unable to read VCard data from SIM:" << m_phonebook.modemPath();
     updateBusy();
+
+    const int maxRetries = 5;
+    if (m_retries < maxRetries) {
+        ++m_retries;
+
+        // Wait a short period before trying again; the phonebook often reports
+        // a failure to read contact data on attempts early after boot
+        m_retryTimer.start(10 * 1000, this);
+    }
 }
 
-void CDSimController::readerStateChanged(QVersitReader::State state)
+void CDSimModemData::readerStateChanged(QVersitReader::State state)
 {
     if (state != QVersitReader::FinishedState)
         return;
 
     QList<QVersitDocument> results = m_contactReader.results();
     if (results.isEmpty()) {
-        qDebug() << "No contacts found in SIM";
         m_simContacts.clear();
         removeAllSimContacts();
     } else {
@@ -189,7 +359,6 @@ void CDSimController::readerStateChanged(QVersitReader::State state)
         importer.importDocuments(results);
         m_simContacts = importer.contacts();
         if (m_simContacts.isEmpty()) {
-            qDebug() << "No contacts imported from SIM data";
             removeAllSimContacts();
         } else {
             // import or remove contacts from local storage as necessary.
@@ -200,45 +369,47 @@ void CDSimController::readerStateChanged(QVersitReader::State state)
     updateBusy();
 }
 
-void CDSimController::deactivateAllSimContacts()
+void CDSimModemData::deactivateAllSimContacts()
 {
-    QList<QContactId> ids = m_manager.contactIds(simSyncTargetFilter());
+    QList<QContactId> ids = manager().contactIds(modemFilter(modemIdentifier()));
     if (ids.size()) {
         QList<QContact> deactivatedContacts;
 
-        foreach (QContact contact, m_manager.contacts(ids)) {
+        foreach (QContact contact, manager().contacts(ids)) {
             QContactDeactivated deactivated;
             contact.saveDetail(&deactivated);
             deactivatedContacts.append(contact);
         }
 
-        if (!m_manager.saveContacts(&deactivatedContacts)) {
+        if (!manager().saveContacts(&deactivatedContacts)) {
             qWarning() << "Error deactivating sim contacts";
         }
     }
 }
 
-void CDSimController::removeAllSimContacts()
+void CDSimModemData::removeAllSimContacts()
 {
-    QList<QContactId> doomedIds = m_manager.contactIds(simSyncTargetFilter());
+    QList<QContactId> doomedIds = manager().contactIds(modemFilter(modemIdentifier()));
     if (doomedIds.size()) {
-        if (!m_manager.removeContacts(doomedIds)) {
+        if (!manager().removeContacts(doomedIds)) {
             qWarning() << "Error removing sim contacts from device storage";
         }
     }
 }
 
-void CDSimController::ensureSimContactsPresent()
+void CDSimModemData::ensureSimContactsPresent()
 {
     // Ensure all contacts from the SIM are present in the store
     QContactFetchHint hint;
-    hint.setDetailTypesHint(QList<QContactDetail::DetailType>() << QContactNickname::Type << QContactPhoneNumber::Type);
+    hint.setDetailTypesHint(QList<QContactDetail::DetailType>() << QContactNickname::Type << QContactPhoneNumber::Type << QContactOriginMetadata::Type);
     hint.setOptimizationHints(QContactFetchHint::NoRelationships | QContactFetchHint::NoActionPreferences | QContactFetchHint::NoBinaryBlobs);
 
-    QList<QContact> storedSimContacts = m_manager.contacts(simSyncTargetFilter(), QList<QContactSortOrder>(), hint);
+    const QString cardIdentifier(modemIdentifier());
+    QContactFilter filter(modemFilter(cardIdentifier));
+    QList<QContact> storedSimContacts = manager().contacts(filter, QList<QContactSortOrder>(), hint);
 
     // Also find any deactivated SIM contacts
-    storedSimContacts.append(m_manager.contacts(simSyncTargetFilter() & deactivatedFilter(), QList<QContactSortOrder>(), hint));
+    storedSimContacts.append(manager().contacts(filter & deactivatedFilter(), QList<QContactSortOrder>(), hint));
 
     QMap<QString, QContact> existingContacts;
     foreach (const QContact &contact, storedSimContacts) {
@@ -373,8 +544,13 @@ void CDSimController::ensureSimContactsPresent()
             simContact.removeDetail(&displayLabel);
 
             QContactSyncTarget syncTarget = simContact.detail<QContactSyncTarget>();
-            syncTarget.setSyncTarget(m_simSyncTarget);
+            syncTarget.setSyncTarget(controller()->m_simSyncTarget);
             simContact.saveDetail(&syncTarget);
+
+            // Record which SIM this contact originated at
+            QContactOriginMetadata metadata;
+            metadata.setGroupId(cardIdentifier);
+            simContact.saveDetail(&metadata);
 
             importContacts.append(simContact);
         }
@@ -382,7 +558,7 @@ void CDSimController::ensureSimContactsPresent()
 
     if (!importContacts.isEmpty()) {
         // Import any contacts which were modified or are not currently present
-        if (!m_manager.saveContacts(&importContacts)) {
+        if (!manager().saveContacts(&importContacts)) {
             qWarning() << "Error while saving imported sim contacts";
         }
     }
@@ -394,13 +570,13 @@ void CDSimController::ensureSimContactsPresent()
             obsoleteIds.append(contact.id());
         }
 
-        if (!m_manager.removeContacts(obsoleteIds)) {
+        if (!manager().removeContacts(obsoleteIds)) {
             qWarning() << "Error while removing obsolete sim contacts";
         }
     }
 }
 
-void CDSimController::voicemailConfigurationChanged()
+void CDSimModemData::voicemailConfigurationChanged()
 {
     if (!m_voicemailConf || !m_simManager.present()) {
         // Wait until SIM is present
@@ -413,8 +589,13 @@ void CDSimController::voicemailConfigurationChanged()
     syncTargetFilter.setDetailType(QContactSyncTarget::Type, QContactSyncTarget::FieldSyncTarget);
     syncTargetFilter.setValue(voicemailTarget);
 
+    const QString cardIdentifier(modemIdentifier());
+    QContactIntersectionFilter filter;
+    filter << syncTargetFilter;
+    filter << QContactOriginMetadata::matchGroupId(cardIdentifier);
+
     QContact voicemailContact;
-    foreach (const QContact &contact, m_manager.contacts(syncTargetFilter)) {
+    foreach (const QContact &contact, manager().contacts(filter)) {
         voicemailContact = contact;
         break;
     }
@@ -429,7 +610,7 @@ void CDSimController::voicemailConfigurationChanged()
     if (voicemailNumber.isEmpty()) {
         // Remove the voicemail contact if present
         if (!voicemailContact.id().isNull()) {
-            if (!m_manager.removeContact(voicemailContact.id())) {
+            if (!manager().removeContact(voicemailContact.id())) {
                 qWarning() << "Unable to remove voicemail contact";
             }
         }
@@ -449,7 +630,14 @@ void CDSimController::voicemailConfigurationChanged()
         if (nickname.isEmpty()) {
             //: Name for the contact representing the voicemail mailbox
             //% "Voicemail System"
-            nickname.setNickname(qtTrId("qtn_sim_voicemail_contact"));
+            QString name(qtTrId("qtn_sim_voicemail_contact"));
+
+            const QString simName(m_simSettings.displayName());
+            if (!simName.isEmpty()) {
+                name.append(QString(QStringLiteral(" (%1)")).arg(simName));
+            }
+
+            nickname.setNickname(name);
             voicemailContact.saveDetail(&nickname);
         }
 
@@ -459,20 +647,23 @@ void CDSimController::voicemailConfigurationChanged()
             voicemailContact.saveDetail(&syncTarget);
         }
 
-        if (!m_manager.saveContact(&voicemailContact)) {
+        QContactOriginMetadata metadata = voicemailContact.detail<QContactOriginMetadata>();
+        if (metadata.isEmpty()) {
+            // Record which SIM this contact originated at
+            metadata.setGroupId(cardIdentifier);
+            voicemailContact.saveDetail(&metadata);
+        }
+
+        if (!manager().saveContact(&voicemailContact)) {
             qWarning() << "Unable to save voicemail contact";
         }
     }
 }
 
-void CDSimController::updateVoicemailConfiguration()
+void CDSimModemData::updateVoicemailConfiguration()
 {
     QString variablePath(QString::fromLatin1("/sailfish/voicecall/voice_mailbox/"));
-    if (m_simManager.present()) {
-        variablePath.append(m_simManager.cardIdentifier());
-    } else {
-        variablePath.append(QString::fromLatin1("default"));
-    }
+    variablePath.append(modemIdentifier());
 
     if (!m_voicemailConf || m_voicemailConf->key() != variablePath) {
         delete m_voicemailConf;
@@ -483,6 +674,34 @@ void CDSimController::updateVoicemailConfiguration()
     }
 }
 
+void CDSimController::removeObsoleteSimContacts()
+{
+    QSet<QString> modemIdentifiers;
+    foreach (CDSimModemData *modem, m_modems.values()) {
+        modemIdentifiers.insert(modem->modemIdentifier());
+    }
+
+    QContactFetchHint hint;
+    hint.setDetailTypesHint(QList<QContactDetail::DetailType>() << QContactOriginMetadata::Type);
+    hint.setOptimizationHints(QContactFetchHint::NoRelationships | QContactFetchHint::NoActionPreferences | QContactFetchHint::NoBinaryBlobs);
+
+    QList<QContactId> obsoleteIds;
+    foreach (const QContact &contact, m_manager.contacts(simSyncTargetFilter(), QList<QContactSortOrder>(), hint)) {
+        QContactOriginMetadata metadata = contact.detail<QContactOriginMetadata>();
+        if (metadata.isEmpty() || !modemIdentifiers.contains(metadata.groupId())) {
+            // This contact is not from one of the current modems - remove it
+            obsoleteIds.append(contact.id());
+        }
+    }
+
+    if (obsoleteIds.size()) {
+        if (!m_manager.removeContacts(obsoleteIds)) {
+            qWarning() << "Error removing sim contacts from device storage";
+        }
+    }
+}
+
 // Instantiate the extension functions
 #include <qcontactdeactivated_impl.h>
 #include <qcontactstatusflags_impl.h>
+#include <qcontactoriginmetadata_impl.h>
