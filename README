@@ -1,20 +1,2 @@
-contactsd
-=========
-
-contactsd is a daemon used to fetch contacts information from various sources
-and add them to tracker.
-
-The data on tracker can either be retrieved using QtMobility Contacts API or
-using tracker directly (e.g. using QtSparql).
-
-Requirements
-============
-
-Building contactsd requires:
-  telepathy-qt >= 0.3.9 and its dependencies <http://telepathy.freedesktop.org>
-  QtMobility Contacts module
-
-Hacking
-=======
-
-See HACKING for version control, coding style and patch submission information.
+This project has migrated to https://git.merproject.org/mer-core/contactsd
+as part of the Mer/Nemo merge work

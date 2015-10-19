@@ -1,2 +1,0 @@
-For additional logging run contactsd --log-console.
-The --log-file and the --plugins option also might be useful.
